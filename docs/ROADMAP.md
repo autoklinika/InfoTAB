@@ -41,7 +41,10 @@
 - [x] Lokalny audyt obecnego `partitions.bin` wykonany; 4 MB layout zgodny ze zdjęciami (użytkownik 2026-11-06)
 - [x] Przygotowano osobny wariant kompilacji `infotab_tab5_16mb_audit` z jawnie wskazanym CSV 16 MB; BUILD PASS (2026-11-06, 02:03)
 - [x] Potwierdzono lokalnie dwa sloty OTA po 6400 KiB, firmware 932416 B, wolne 5621184 B w każdym (2026-11-06)
-- [ ] Potwierdzić przez COM6 rzeczywistą pojemność układu Flash — skrypt `scripts/probe-flash-windows.ps1` (wyłącznie odczyt)
+- [x] Fizyczna pamięć Flash potwierdzona przez COM6: 16 MB, ESP32-P4 rev. 1.3; `esptool flash-id` READ ONLY PASS (2026-11-06)
+- [x] Dodano skrypt backupu pełnych 16 MiB do prywatnego katalogu Windows + walidację rozmiaru, SHA-256 i starego layoutu (test na sprzęcie PENDING)
+- [ ] Potwierdzić lokalny backup urządzenia i wynik `BACKUP VERIFIED - READ ONLY PASS` — **plik zawiera potencjalne hasło Wi-Fi, nie udostępniać**
+- [ ] Sprawdzić stan bootloadera i przygotować plan bezpiecznej migracji USB bez pełnego kasowania Flash
 - [ ] Plan migracji partycji do pełnej przestrzeni 16 MB: backup/odzyskanie NVS, USB recovery, test rollback
 - [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
 - [ ] Potwierdzony rollback / recovery przez USB
