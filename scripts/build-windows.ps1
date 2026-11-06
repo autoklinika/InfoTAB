@@ -17,7 +17,7 @@ Write-Host '[InfoTAB] Configuring Click 8.1.8 in PlatformIO private Python...'
 if ($LASTEXITCODE -ne 0) { throw 'pip failed to install Click 8.1.8' }
 
 Write-Host '[InfoTAB] Verifying Click installation...'
-& $python -c 'from importlib.metadata import version; print("Click", version("click"))'
+& $python -m pip show click
 if ($LASTEXITCODE -ne 0) { throw 'Click verification failed' }
 
 Push-Location $project
