@@ -2,6 +2,32 @@
 
 Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
 
+## Naprawa: OTA "No response from device" na Windows 11
+
+W `espota.py` ten błąd występuje, gdy po zaproszeniu UDP
+InfoTAB nie zestawi przychodzącego TCP do komputera Windows.
+Poprawiono uploader: zawsze korzysta z callback TCP 3233
+i z adresu komputera wybranego przez trasę sieciową do InfoTAB.
+
+**Jednorazowo** ustaw ograniczoną regułę Windows Defender Firewall
+(UAC / uprawnienia administratora):
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-ota-firewall-windows.ps1
+```
+
+Następnie uruchom zwykły uploader:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1
+```
+
+Skrypt najpierw kompiluje, **potem** pyta o hasło; dopiero
+przy prośbie o hasło aktywuj na InfoTAB `OTA WIFI > AKTYWUJ OTA`.
+Nie podawaj hasła w rozmowie. Pełna diagnostyka:
+[docs/INFOTAB_V06.md](docs/INFOTAB_V06.md).
+
 ## InfoTAB v0.6 — aplikacja UPS (Modbus) + Wi-Fi OTA
 
 **Aktualny priorytet:** właściwa aplikacja, brak migracji partycji w tym etapie.
