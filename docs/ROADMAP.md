@@ -40,6 +40,16 @@
 - [ ] Test kolejnej aktualizacji bez hasła, tylko podczas ręcznie aktywowanej sesji: PENDING.
 - [ ] Separacja sieci OTA i docelowe uwierzytelnianie/podpisy: później.
 
+## Etap 3C: InfoTAB v0.8 — jasnosc, kafelki i moc
+
+- [x] Zmieniono jasnosc wspolnej palety i ekranow serwisowych.
+- [x] Wszystkie osiem wartosci na stronie UPS ma osobne kafelki.
+- [x] Dodano odczyt Modbus 156/159 i orientacyjna moc wyjsciowa (skala x100 PENDING kalibracji).
+- [x] Zachowano dzialajacy Modbus, gesty i OTA z jednorazowym haslem.
+- [ ] Build Windows 11 i instalacja OTA v0.8 na Tab5.
+- [ ] Zdjecie/ocena czytelnosci i ewentualne poprawki kafelkow.
+- [ ] Kalibracja mocy porownaniem do panelu UPS przy roznych obciazeniach.
+
 ## Etap 3B: InfoTAB v0.7 — wieloekranowy HMI
 
 - [x] Dodano 4 ekrany główne: START / UPS / SIEC-AI / SERWIS.
