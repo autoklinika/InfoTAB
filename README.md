@@ -4,7 +4,7 @@ Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
 
 ## Status
 
-v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: PASS** dla dotyku i skanowania Wi-Fi na rzeczywistym Tab5. **v0.3: konfiguracja sieci Wi-Fi bezpośrednio z ekranu — kod przygotowany, kompilacja i test sprzętowy PENDING.** OTA i integracja UPS pozostają do wykonania.
+v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: PASS** dla dotyku i skanowania Wi-Fi na rzeczywistym Tab5. **v0.3: połączenie z Wi-Fi skonfigurowane na ekranie — PASS pierwszego połączenia (2026-11-06).** Trwałość ustawień po restarcie, IP i OTA nadal do weryfikacji. OTA i integracja UPS pozostają do wykonania.
 
 **Zasada:** gałąź `main` pozostaje stabilna; zmiany z gałęzi roboczych są scalane wyłącznie po zatwierdzeniu.
 
