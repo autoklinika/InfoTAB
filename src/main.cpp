@@ -388,36 +388,49 @@ void drawPower() {
     powerTile(3, 1, "NAP. BATERII", "Akumulator");
     drawPowerValues();
 }
+// NAS screen uses verified TCP port reachability only.
+// Disk/RAID/backup metrics require a future authenticated QNAP API.
 void drawNetworkValues() {
-    valueAt(63, 209, 519, 61, connectionStatus(),
-            connected() ? UI_GOOD : UI_WARNING, 3);
-    valueAt(63, 336, 520, 42,
-            connected() ? WiFi.localIP().toString() : String("--"),
-            UI_WHITE, 2);
-    valueAt(63, 438, 519, 42,
-            connected() ? String(WiFi.RSSI()) + " dBm" : String("--"),
-            UI_WHITE, 2);
-    valueAt(670, 209, 529, 61,
-            aiBridgeChecked ? (aiBridgeOk ? "ONLINE" : "OFFLINE") :
-            "SPRAWDZANIE", aiBridgeOk ? UI_GOOD : UI_WARNING, 3);
-    valueAt(670, 351, 520, 48,
-            ups.valid ? "MODBUS POLACZONY" : "MODBUS NIEDOSTEPNY",
-            ups.valid ? UI_GOOD : UI_WARNING, 2);
+    const bool online = nasChecked && (nasHttps || nasQts);
+    valueAt(58, 145, 540, 64,
+            !nasChecked ? "SPRAWDZANIE" : (online ? "DOSTEPNY" : "NIEDOSTEPNY"),
+            online ? UI_GOOD : UI_WARNING, 4);
+    valueAt(675, 145, 535, 64,
+            !nasChecked ? "--" : (nasQts ? "TCP 8080  OK" : "BRAK POLACZENIA"),
+            nasQts ? UI_GOOD : UI_WARNING, 3);
+    valueAt(58, 429, 540, 64,
+            !nasChecked ? "--" : (nasHttps ? "TCP 443  OK" : "BRAK POLACZENIA"),
+            nasHttps ? UI_GOOD : UI_WARNING, 3);
+    valueAt(675, 429, 535, 64, "BRAK DANYCH API", UI_MUTED, 3);
 }
 void drawNetwork() {
-    tabShell("SIEC I KOMUNIKACJA", 2);
-    panel(32, 110, 576, 422);
-    panel(639, 110, 609, 422);
-    uiText(63, 143, "LACZNOSC WI-FI", UI_MUTED);
-    uiText(63, 299, "IP URZADZENIA", UI_MUTED);
-    uiText(63, 403, "SYGNAL", UI_MUTED);
-    uiText(670, 143, "AI PLATFORM", UI_MUTED);
-    rule(670, 304, 529);
-    uiText(670, 314, "UPS / MODBUS TCP", UI_MUTED);
-    uiText(670, 424, "192.168.1.102:502  /  FC03", UI_MUTED);
-    M5.Display.fillRoundRect(42, 555, 369, 53, 9, UI_CARD);
-    uiText(64, 573, "USTAWIENIA WI-FI", UI_ACCENT);
-    uiText(473, 573, "Adres AI: 192.168.1.100", UI_MUTED, 2, UI_BG);
+    tabShell("", 1);
+    panel(32, 24, 595, 264);
+    panel(651, 24, 597, 264);
+    panel(32, 308, 595, 264);
+    panel(651, 308, 597, 264);
+    uiText(58, 54, "GLOBAL NAS", UI_WHITE, 3);
+    uiText(58, 100, "DOSTEPNOSC SIECIOWA", UI_MUTED);
+    rule(58, 246, 541);
+    uiText(58, 260, "IP: 192.168.1.101", UI_MUTED, 1);
+
+    uiText(675, 54, "PANEL QNAP", UI_WHITE, 3);
+    uiText(675, 100, "POLACZENIE TCP", UI_MUTED);
+    rule(675, 246, 535);
+    uiText(675, 260, "Port 8080  /  bez logowania", UI_MUTED, 1);
+
+    uiText(58, 338, "HTTPS", UI_WHITE, 3);
+    uiText(58, 386, "DOSTEPNOSC PORTU", UI_MUTED);
+    rule(58, 529, 541);
+    uiText(58, 541, "Port 443  /  bez pobierania danych", UI_MUTED, 1);
+
+    uiText(675, 338, "DYSKI / BACKUP", UI_WHITE, 3);
+    uiText(675, 386, "DANE WYMAGAJA QNAP API", UI_MUTED);
+    rule(675, 529, 535);
+    uiText(675, 541, "Nie pokazujemy nieznanych stanow", UI_MUTED, 1);
+
+    uiText(42, 590, "MONITORING SIECI NAS  /  brak danych o RAID i backupie",
+           UI_MUTED, 2, UI_BG);
     drawNetworkValues();
 }
 void drawServiceValues() {
