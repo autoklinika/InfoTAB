@@ -3,8 +3,11 @@
 #include <M5Unified.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 
-// InfoTAB v0.3: Wi-Fi setup exclusively on the touchscreen.
+// InfoTAB v0.4 preflight: Wi-Fi setup + read-only OTA diagnostic screen.
 // Credentials are NEVER embedded in source, printed on Serial, or sent to GitHub.
 // The ESP32-P4 uses the ESP32-C6 Wi-Fi companion via M5Stack's SDIO pin mapping.
 
@@ -25,8 +28,9 @@ constexpr int KEY_HEIGHT = 51;
 constexpr int KEY_FIRST_Y = 313;
 constexpr uint32_t CONNECT_TIMEOUT_MS = 20000;
 constexpr uint32_t HOME_REFRESH_MS = 5000;
+constexpr const char* BRIDGE_HEALTH = "http://192.168.1.100:8080/health";
 
-enum class Page { Home, Networks, Password, Connecting };
+enum class Page { Home, Networks, Password, Connecting, OtaDiag };
 struct NetworkEntry {
     String ssid;
     int rssi = -100;
@@ -119,6 +123,7 @@ void drawHome() {
         button(408, 450, 335, 90, "POLACZ PONOWNIE", TFT_DARKGREEN, 2);
         button(777, 450, 335, 90, "ZAPOMNIJ SIEC", TFT_MAROON, 2);
     }
+    button(45, 557, 375, 67, "OTA DIAG (ODCZYT)", TFT_NAVY, 2);
     writeText(45, displayHeight - 62, "Konfiguracja lokalna | bez hasel w GitHub", TFT_LIGHTGREY);
 }
 
@@ -198,6 +203,71 @@ void drawPassword() {
     writeText(43, 680, "Haslo pozostaje w pamieci urzadzenia (NVS).", TFT_LIGHTGREY);
 }
 
+
+// Diagnostic-only: these APIs inspect partition metadata; no flash writes.
+void drawOtaDiag() {
+    header("Diagnostyka OTA (TYLKO ODCZYT)");
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
+    const esp_partition_t* boot = esp_ota_get_boot_partition();
+    const uint32_t sketchBytes = ESP.getSketchSize();
+    writeText(45, 116, "Firmware InfoTAB: v0.4-preflight", TFT_CYAN, 2);
+    writeText(45, 160, "Obraz programu: " + String(sketchBytes) + " B", TFT_WHITE, 2);
+    if (running) {
+        writeText(45, 218, "Aktywna: " + String(running->label), TFT_GREEN, 2);
+        writeText(45, 257, "Offset: 0x" + String((unsigned long)running->address, HEX) +
+                  "    Rozmiar: " + String(running->size / 1024) + " KiB", TFT_WHITE, 2);
+    } else {
+        writeText(45, 218, "Brak aktywnej partycji!", TFT_RED, 2);
+    }
+    if (next) {
+        writeText(45, 325, "Nastepny slot OTA: " + String(next->label), TFT_CYAN, 2);
+        writeText(45, 364, "Offset: 0x" + String((unsigned long)next->address, HEX) +
+                  "    Rozmiar: " + String(next->size / 1024) + " KiB", TFT_WHITE, 2);
+    } else {
+        writeText(45, 325, "Brak slotu OTA: aktualizacja ZABLOKOWANA", TFT_RED, 2);
+    }
+    writeText(45, 423, boot && running && boot == running ?
+              "Boot slot zgodny z uruchomionym" : "Boot slot wymaga weryfikacji",
+              boot && running && boot == running ? TFT_GREEN : TFT_YELLOW, 2);
+    writeText(45, 472, "Rollback: jeszcze nie przetestowano", TFT_YELLOW, 2);
+    writeText(45, 520, connected() ? "Wi-Fi: polaczono" : "Wi-Fi: offline",
+              connected() ? TFT_GREEN : TFT_YELLOW, 2);
+    button(45, 611, 270, 72, "WROC", TFT_DARKGREY, 2);
+    button(348, 611, 420, 72, "TEST AI BRIDGE", TFT_DARKCYAN, 2);
+    writeText(45, 568, infoMessage.substring(0, 80), TFT_LIGHTGREY, 2);
+
+    // USB log gives evidence without revealing credentials or SSID.
+    Serial.printf("[InfoTAB] OTA_DIAG sketch=%lu running=%s run_size=%lu next=%s next_size=%lu boot=%s\n",
+                  static_cast<unsigned long>(sketchBytes),
+                  running ? running->label : "NONE",
+                  running ? static_cast<unsigned long>(running->size) : 0UL,
+                  next ? next->label : "NONE",
+                  next ? static_cast<unsigned long>(next->size) : 0UL,
+                  boot ? boot->label : "NONE");
+}
+
+void checkBridgeHealth() {
+    if (!connected()) {
+        infoMessage = "Wi-Fi offline. Wroc do ustawien sieci.";
+        drawOtaDiag();
+        return;
+    }
+    HTTPClient http;
+    http.setConnectTimeout(1500);
+    http.setTimeout(2000);
+    int status = -1;
+    if (http.begin(BRIDGE_HEALTH)) {
+        status = http.GET();
+        http.end();
+    }
+    // HTTP 200 only checks reachability, not OTA readiness/authentication.
+    infoMessage = status == 200 ? "AI BRIDGE: HTTP 200 (ONLINE)" :
+                  "AI BRIDGE: brak HTTP 200, kod " + String(status);
+    Serial.printf("[InfoTAB] BRIDGE_HEALTH HTTP=%d\n", status);
+    drawOtaDiag();
+}
+
 void drawConnecting() {
     header("Laczenie z Wi-Fi");
     writeText(55, 160, "Proba polaczenia...", TFT_CYAN, 3);
@@ -213,6 +283,7 @@ void render() {
         case Page::Networks: drawNetworks(); break;
         case Page::Password: drawPassword(); break;
         case Page::Connecting: drawConnecting(); break;
+        case Page::OtaDiag: drawOtaDiag(); break;
     }
 }
 
@@ -330,7 +401,11 @@ void selectNetwork(int index) {
 }
 
 void handleHome(int x, int y) {
-    if (inside(x, y, 45, 450, 330, 90)) {
+    if (inside(x, y, 45, 557, 375, 67)) {
+        page = Page::OtaDiag;
+        infoMessage = "Nacisnij TEST AI BRIDGE, by sprawdzic API.";
+        render();
+    } else if (inside(x, y, 45, 450, 330, 90)) {
         scanNetworks();
     } else if (savedSsid.length() && inside(x, y, 408, 450, 335, 90)) {
         pendingSsid = savedSsid;
@@ -338,6 +413,18 @@ void handleHome(int x, int y) {
         startConnection(false);
     } else if (savedSsid.length() && inside(x, y, 777, 450, 335, 90)) {
         forgetSaved();
+    }
+}
+
+void handleOtaDiag(int x, int y) {
+    if (inside(x, y, 45, 611, 270, 72)) {
+        page = Page::Home;
+        infoMessage = "";
+        render();
+    } else if (inside(x, y, 348, 611, 420, 72)) {
+        infoMessage = "Trwa test API...";
+        drawOtaDiag();
+        checkBridgeHealth();
     }
 }
 
@@ -454,7 +541,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.3 boot: touchscreen Wi-Fi configuration");
+    logEvent("v0.4-preflight boot: Wi-Fi + read-only OTA diagnostic");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
@@ -476,6 +563,7 @@ void loop() {
             case Page::Networks: handleNetworks(x, y); break;
             case Page::Password: handlePassword(x, y); break;
             case Page::Connecting: handleConnecting(x, y); break;
+            case Page::OtaDiag: handleOtaDiag(x, y); break;
         }
     }
     updateConnection();
