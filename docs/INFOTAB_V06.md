@@ -143,7 +143,7 @@ prześlij tylko niesekretne linie z procesu: `Sending invitation`,
 `Authenticating`, `Waiting for device` i ostateczny kod błędu.
 Nie przełączaj portów routera ani nie wystawiaj OTA do Internetu.
 
-**Status:** poprawka przygotowana, test ponownego OTA PENDING.
+**Status:** poprawiony uploader i reguła callback TCP 3233 przeszły pierwszy transfer OTA — `WIFI OTA TRANSFER SUCCESS` (użytkownik 2026-11-06); uruchomienie po aktualizacji wymaga potwierdzenia.
 
 ## Ograniczenia OTA w tej fazie
 
@@ -167,7 +167,8 @@ Nie przełączaj portów routera ani nie wystawiaj OTA do Internetu.
 - [ ] UPS pokazuje rzeczywiste pomiary Modbus oraz adres źródła .102.
 - [ ] Wi-Fi/AI Bridge pozostają dostępne.
 - [ ] `OTA WIFI` pokazuje jednorazowe hasło i wygasa po 5 minutach.
-- [ ] Pierwsza aktualizacja OTA po Wi-Fi: SUCCESS.
+- [x] Transfer obrazu OTA po Wi-Fi: SUCCESS (użytkownik 2026-11-06).
+- [ ] Uruchomienie nowej aplikacji po transferze: PENDING.
 - [ ] Po restarcie powracają UI i konfiguracja Wi-Fi.
 
 **Nie wolno traktować tych testów jako PASS, dopóki nie zostaną
