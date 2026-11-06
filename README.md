@@ -4,7 +4,7 @@ Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
 
 ## Status
 
-v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: ponowny test na sprzęcie (PENDING)** — poprzednio zgłoszono czarny ekran, ale zaobserwowano, że krótkie naciśnięcie bocznego przycisku włącza urządzenie po wgraniu. Nie uznajemy przyczyny za potwierdzoną do testu.
+v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: PASS dla dotyku i skanowania Wi-Fi** na rzeczywistym Tab5 (potwierdzone przez użytkownika 2026-11-06). Połączenie z siecią, adres IP, OTA i integracja UPS pozostają do wykonania.
 
 **Zasada:** gałąź `main` pozostaje stabilna; zmiany z gałęzi roboczych są scalane wyłącznie po zatwierdzeniu.
 
