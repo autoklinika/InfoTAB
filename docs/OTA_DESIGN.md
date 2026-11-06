@@ -172,6 +172,21 @@ Następnie przygotować **lokalną, chronioną kopię** działającego obrazu
 i NVS/otadata/tabeli przed migracją. NVS zawiera hasło Wi-Fi: nie publikować
 go ani w repo, ani w komunikatorze, nie dołączać surowego pliku do rozmowy.
 
+## Flash ID — potwierdzenie sprzętowe PASS (2026-11-06)
+
+Odczyt `scripts/probe-flash-windows.ps1` z fizycznego Tab5 przez COM6:
+ESP32-P4 rev. 1.3, układ Flash producent 0x46 / device 0x4018,
+**Detected flash size: 16MB**, tylko odczyt i reset przez RTS.
+
+Potwierdzono więc, że problem dotyczy używanej tabeli partycji,
+nie pojemności układu. Poprawny wariant 16 MB skompilowano już wcześniej.
+
+**Następny obowiązkowy etap:** `docs/FLASH_BACKUP.md` — backup pełnych
+16 MB na Windows przy użyciu `scripts/backup-flash-windows.ps1`.
+Ta kopia zawiera potencjalnie hasło Wi-Fi w NVS, nie wolno jej
+publikować ani załączać do rozmów. Migracja pozostaje BLOCKED do
+potwierdzenia kopii i odtworzenia.
+
 ## Architektura docelowa (propozycja)
 
 - Punkt udostępniający firmware: serwer lokalny AI Platform (`192.168.1.100`);
