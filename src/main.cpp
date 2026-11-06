@@ -83,8 +83,7 @@ UpsData ups;
 bool otaArmed = false;
 bool otaInProgress = false;
 uint32_t otaArmedAt = 0;
-constexpr uint32_t OTA_WINDOW_MS = 300000;
-String otaPassword;
+constexpr uint32_t OTA_WINDOW_MS = 120000;
 String otaStatus = "Gotowe do aktywacji aktualizacji.";
 
 void logEvent(const char* event) {
@@ -575,7 +574,7 @@ void drawOtaDiag() {
     const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
     const esp_partition_t* boot = esp_ota_get_boot_partition();
     const uint32_t sketchBytes = ESP.getSketchSize();
-    writeText(45, 116, "Firmware InfoTAB: v0.7", TFT_CYAN, 2);
+    writeText(45, 116, "Firmware InfoTAB: v0.8", TFT_CYAN, 2);
     writeText(45, 160, "Obraz programu: " + String(sketchBytes) + " B", TFT_WHITE, 2);
     if (running) {
         writeText(45, 218, "Aktywna: " + String(running->label), TFT_GREEN, 2);
@@ -646,13 +645,13 @@ void drawOtaUpload() {
 
     M5.Display.drawRoundRect(43, 302, displayWidth - 86, 201, 12, TFT_DARKGREY);
     if (otaArmed) {
-        writeText(65, 326, "JEDNORAZOWE HASLO (TYLKO NA EKRANIE)", TFT_LIGHTGREY, 2);
-        writeText(65, 381, otaPassword, TFT_GREEN, 4);
-        writeText(65, 450, otaInProgress ? "AKTUALIZACJA W TOKU..." :
-                  "Aktywne maksymalnie 5 minut.", TFT_YELLOW, 2);
+        writeText(65, 338, otaInProgress ? "PRZESYLANIE FIRMWARE" :
+                  "GOTOWE - AKTUALIZUJ Z WINDOWS", TFT_GREEN, 3);
+        writeText(65, 414, "Sesja serwisowa: maks. 2 minuty.", TFT_LIGHTGREY, 2);
+        writeText(65, 460, "Bez hasla - tylko zaufana siec LAN.", TFT_YELLOW, 2);
     } else {
-        writeText(65, 351, "Odbior OTA wylaczony. Aktywuj na 5 minut.", TFT_YELLOW, 2);
-        writeText(65, 426, "Haslo nie jest zapisane na GitHub ani w NVS.", TFT_LIGHTGREY, 2);
+        writeText(65, 348, "Odbior OTA WYLACZONY.", TFT_LIGHTGREY, 3);
+        writeText(65, 419, "Nacisnij aktywuj tylko przed transferem.", TFT_YELLOW, 2);
     }
     M5.Display.fillRect(48, 518, displayWidth - 96, 55, TFT_BLACK);
     writeText(48, 525, otaStatus.substring(0, 75), TFT_CYAN, 2);
@@ -668,7 +667,6 @@ void stopOta() {
     if (otaInProgress) return;
     if (otaArmed) ArduinoOTA.end();
     otaArmed = false;
-    otaPassword = "";
 }
 
 void armOta() {
@@ -684,17 +682,12 @@ void armOta() {
         render();
         return;
     }
-    // Random token is generated only when the user manually arms OTA.
-    // Never store token in source, GitHub, NVS or serial logs.
-    static const char alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    otaPassword = "";
-    for (int i = 0; i < 18; ++i)
-        otaPassword += alphabet[esp_random() % (sizeof(alphabet) - 1)];
-
+    // No password: device-side manual activation, 120-second service window.
+    // SECURITY: any reachable LAN client can initiate firmware upload in this window.
+    // Use only on trusted/isolated LAN; signed production OTA is future work.
     ArduinoOTA.setHostname("infotab");
     ArduinoOTA.setPort(3232);
     ArduinoOTA.setMdnsEnabled(false);
-    ArduinoOTA.setPassword(otaPassword.c_str());
     ArduinoOTA.onStart([]() {
         otaInProgress = true;
         otaStatus = "Przesylanie firmware...";
@@ -714,9 +707,9 @@ void armOta() {
     ArduinoOTA.begin();
     otaArmedAt = millis();
     otaArmed = true;
-    otaStatus = "Wpisz haslo w lokalnym skrypcie Windows.";
+    otaStatus = "Uruchom uploader bez hasla na Windows.";
     render();
-    logEvent("OTA armed (password never logged)");
+    logEvent("OTA armed without password (2 minute local service window)");
 }
 
 void handleOtaUpload(int x, int y) {
@@ -1016,7 +1009,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.7 boot: four-page swipe HMI + Modbus + OTA");
+    logEvent("v0.8 boot: brighter HMI, power tile and manual passwordless OTA");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
