@@ -1,5 +1,27 @@
 # InfoTAB
 
+## InfoTAB v0.8 — jaśniejsze HMI i kafelki UPS
+
+- Jaśniejsza grafitowo-niebieska kolorystyka na wszystkich ekranach.
+- Ekran UPS: osiem osobnych kafelków (wejście/wyjście/częstotliwość/
+  moc*, bateria/obciążenie/podtrzymanie/napięcie akumulatora).
+- Moc wyjściowa *orientacyjna*, z prefiksem `~`, wymaga kalibracji.
+- Gesty, Modbus TCP, Wi-Fi i uwierzytelnione OTA zachowane.
+- **Nie zmieniamy tabeli partycji Flash.**
+
+Przejrzyj na urządzeniu po aktualizacji OTA:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1
+```
+
+Przycisk OTA na InfoTAB: **SERWIS → OTA WIFI → AKTYWUJ OTA**.
+Wpisz lokalnie na Windows jednorazowe hasło z ekranu.
+
+Opis: [docs/HMI_V08.md](docs/HMI_V08.md).
+
+
 ## v0.8 — jaśniejsze HMI / kafelki UPS / OTA bez hasła
 
 Przygotowany kod: 8 kafelków na stronie UPS, jaśniejsza paleta,
