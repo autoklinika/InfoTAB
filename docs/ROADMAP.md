@@ -28,6 +28,14 @@
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
+## Etap 3: telemetria UPS — główny priorytet
+
+- [x] Potwierdzono dostępne pola z QNAP NUT (z Minisforum): `ups.status`, `battery.charge`, `ups.load`, `battery.runtime`.
+- [x] Dodano do InfoTAB v0.5 pulpit UPS + AI Bridge, pobierający odczyty po Wi-Fi; stan sprzętowy PENDING.
+- [ ] Build v0.5 na Windows 11 i Upload przez COM6.
+- [ ] Potwierdzić bezpośredni odczyt NUT z Tab5; jeśli NAS blokuje dostęp, stworzyć proxy read-only na Minisforum.
+- [ ] Potwierdzić alarm OB/LB, odświeżanie i zachowanie przy zaniku sieci.
+
 ## Etap 3: telemetria UPS
 - [ ] Uzgodnienie kontraktu API z rzeczywistymi danymi UPS
 - [ ] Dane: moc, obciążenie, bateria, zasilanie, alarmy (tylko potwierdzone odczyty)
