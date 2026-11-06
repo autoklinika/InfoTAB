@@ -1,6 +1,6 @@
 # InfoTAB — lokalna kopia pełnej pamięci Flash przed migracją OTA
 
-**Status:** narzędzia gotowe, backup rzeczywistego urządzenia jeszcze niepotwierdzony.  
+**Status:** backup całych 16 MiB **PASS** na Windows 11, wykonany 2026-11-06; SHA-256 zweryfikowany, dotychczasowa tabela partycji zgodna. Nie wysyłać prywatnej kopii poza komputer.  
 **Data:** 2026-11-06.  
 **Cel:** zachować odtwarzalny obraz całych 16 MiB Flash, w tym NVS z konfiguracją Wi-Fi.
 
@@ -79,3 +79,33 @@ Po potwierdzonym backupie nadal trzeba:
    dumpa bez sprawdzenia zgodności docelowej płytki.**
 
 Obecny status migracji: **BLOCKED — backup do potwierdzenia**.
+
+## Wynik backupu (2026-11-06)
+
+- Pełny odczyt 16 777 216 bajtów z COM6: PASS.
+- Walidacja pliku i SHA-256: PASS.
+- Oryginalne NVS/otadata/app0/app1: zgodne z 4 MB layoutem.
+- Brak zapisu lub kasowania Flash.
+- Nie publikujemy dokładnej ścieżki ani zawartości binarki.
+- Odtworzenie obrazu na sprzęcie: NIEPRZETESTOWANE.
+
+## Następny etap — audyt migracji, również tylko odczyt
+
+W terminalu PowerShell VS Code:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\preflight-migration-windows.ps1
+```
+
+Skrypt:
+1. Weryfikuje najnowszy lokalny backup 16 MiB i jego oryginalne partycje.
+2. Porównuje nową tabelę 16 MB z kopią oryginalnego układu.
+3. Sygnalizuje, czy stare app1/SPIFFS/coredump zawierają dane inne niż 0xFF.
+   **Nie dekoduje ani nie wyświetla tych danych.**
+4. Odczytuje stan zabezpieczeń ESP32-P4 przy użyciu
+   `esptool --no-stub get-security-info`, bez zapisu pamięci.
+
+Jeżeli pojawi się Secure Boot lub Flash Encryption aktywne,
+**NIE flashować tabeli partycji ani firmware** do czasu dodatkowej analizy.
+Skrypt nie migruje danych ani nie wykonuje OTA.
