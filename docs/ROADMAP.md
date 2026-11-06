@@ -19,10 +19,11 @@
 - [x] Wykrywanie sieci Wi-Fi na rzeczywistym Tab5 — PASS (potwierdzone przez użytkownika 2026-11-06)
 - [x] Kod v0.3: wybór SSID, klawiatura dotykowa i łączenie Wi-Fi (pierwsze połączenie potwierdzone na sprzęcie 2026-11-06)
 - [x] Pierwsze połączenie z wybraną siecią Wi-Fi — PASS (potwierdzone przez użytkownika 2026-11-06)
-- [ ] Potwierdzenie adresu IP przydzielonego Tab5
-- [ ] Automatyczne ponowne połączenie po restarcie, usunięcie danych sieci
+- [x] Adres IP przydzielony przez DHCP, odczytany na Tab5: 192.168.1.38 (potwierdzone przez użytkownika 2026-11-06)
+- [x] Automatyczne ponowne połączenie po restarcie — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [ ] Usunięcie danych sieci (funkcja dostępna, test sprzętowy PENDING)
 - [ ] Test dostępności API AI Platform po Wi-Fi
-- [x] Kod konfiguracji sieci bez haseł w repozytorium; zapis po udanym połączeniu (trwałość zapisu wymaga testu restartu)
+- [x] Kod konfiguracji sieci bez haseł w repozytorium; trwałość zapisu potwierdzona testem restartu 2026-11-06
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
@@ -32,7 +33,8 @@
 - [ ] Interfejs lokalny UPS, znaczniki czasu, rozłączenia
 
 ## Etap 4: OTA
-- [ ] Plan partycji aktualizacji dla 16 MB Flash
+- [x] Weryfikacja domyślnej tabeli partycji dla ESP32-P4 / Arduino 3.2.1: NVS + otadata + app0/app1 po 0x640000 (6.25 MiB), bez konieczności zmiany partycji
+- [ ] Potwierdzenie rozmiaru obrazu .bin i odczytu aktywnej partycji OTA z urządzenia
 - [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
 - [ ] Potwierdzony rollback / recovery przez USB
 - [ ] Wydania firmware i opcjonalna CI w GitHub Actions
