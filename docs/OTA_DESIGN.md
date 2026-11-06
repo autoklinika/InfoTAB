@@ -1,6 +1,6 @@
 # InfoTAB — projekt bezpiecznej aktualizacji OTA
 
-Status: **projekt / preflight**, bez kodu OTA i bez zmian w aktualnie działającym firmware v0.3.
+Status: **v0.4-preflight — kod diagnostyczny przygotowany**, kompilacja i uruchomienie na sprzęcie: PENDING. Bez mechanizmu aktualizacji OTA. Działający firmware v0.3 na Tab5 pozostaje bez zmian do następnego wgrania przez USB.
 Data: 2026-11-06.
 
 ## Stan potwierdzony na sprzęcie
@@ -38,6 +38,36 @@ zachowania działającego bootloadera po innych wcześniejszych flashach.
 - https://github.com/pioarduino/platform-espressif32/blob/54.03.21/boards/esp32-p4-evboard.json
 - https://github.com/espressif/arduino-esp32/blob/3.2.1/tools/partitions/default_16MB.csv
 - https://docs.espressif.com/projects/arduino-esp32/en/latest/tutorials/partition_table.html
+
+## v0.4-preflight — diagnostyka na ekranie
+
+Nowy ekran `OTA DIAG (ODCZYT)` w ustawieniach InfoTAB pokazuje:
+- wersję diagnostyczną i wielkość aktualnego obrazu aplikacji;
+- aktywną partycję oraz jej rozmiar i offset;
+- partycję wybraną jako następny slot aktualizacji;
+- zgodność bieżącego slotu rozruchowego z działającą aplikacją;
+- status Wi-Fi oraz opcjonalny test HTTP 200 do `http://192.168.1.100:8080/health`.
+
+Wszystkie odczyty partycji wykorzystują API ESP-IDF (`esp_ota_get_running_partition`, `esp_ota_get_next_update_partition` i `esp_ota_get_boot_partition`).
+**Nie ma wywołań `Update.begin`, `esp_ota_begin`, `esp_ota_set_boot_partition` ani zapisu do Flash**; nie uruchomimy jeszcze OTA.
+
+Test HTTP dotyczy wyłącznie `/health`; nie jest przesyłaniem firmware.
+Weryfikacja wykonana z hosta AI Platform: endpoint `/health` zwraca HTTP 200, a jego OpenAPI
+nie zawiera endpointu do aktualizacji InfoTAB. Należy przygotować odrębny, minimalny
+serwis OTA z kontrolą dostępu — nie rozszerzać bez potrzeby AI Bridge.
+
+### Test odbiorczy na Tab5
+
+1. `git pull --ff-only`, następnie lokalny `scripts/build-windows.ps1`.
+2. Po `BUILD SUCCESS` wgrać przez USB-C/COM6.
+3. Po uruchomieniu sprawdzić autołączenie z zapamiętaną siecią.
+4. Otworzyć `OTA DIAG (ODCZYT)`; przepisać nazwy i rozmiary aktywnego i zapasowego slotu.
+5. Nacisnąć `TEST AI BRIDGE`, oczekiwane: `AI BRIDGE: HTTP 200 (ONLINE)`.
+6. Wcisnąć `WROC`, potwierdzić działanie konfiguracji Wi-Fi.
+
+Jeśli Build nie przejdzie, **nie wykonywać Upload**.
+Jeśli OTA slot jest niedostępny lub za mały, bez diagnozy nie instalować nowych obrazów.
+Nie podawać w logach haseł sieci ani prywatnych tokenów.
 
 ## Architektura docelowa (propozycja)
 
