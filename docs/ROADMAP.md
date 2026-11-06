@@ -8,14 +8,16 @@
 - [ ] Potwierdzenie logów portu szeregowego (115200 bps)
 - [ ] Potwierdzona rewizja sterownika ekranu na urządzeniu
 
-## Etap 1: ekran i HMI (v0.2: ponowny test po sprawdzeniu przycisku zasilania)
-- [ ] Test dotyku i orientacji (próba v0.2: czarny ekran, wymagane rozdzielenie testów)
+## Etap 1: ekran i HMI (test dotyku v0.2: PASS)
+- [x] Reakcja dotyku na rzeczywistym Tab5 — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [ ] Szczegółowa weryfikacja orientacji, narożników i kalibracji dotyku
 - [ ] Projekt graficzny ekranu InfoTAB
 - [ ] Obsługa błędów, watchdog, komunikaty stanu
 
 ## Etap 2: sieć
-- [ ] Test Wi-Fi przez ESP32-C6/SDIO (próba v0.2: czarny ekran, test niepotwierdzony)
-- [ ] Potwierdzenie widoczności sieci 2,4 GHz na rzeczywistym Tab5
+- [x] Skanowanie Wi-Fi przez ESP32-C6/SDIO — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [x] Wykrywanie sieci Wi-Fi na rzeczywistym Tab5 — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [ ] Połączenie z wybraną siecią 2,4 GHz, IP/DHCP, test dostępności API
 - [ ] Konfiguracja sieci bez haseł w repozytorium
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
@@ -36,6 +38,7 @@
 - Użytkownik zgłosił czarny ekran po próbie v0.2, ale v0.1 uruchomił się po naciśnięciu przycisku zasilania.
 - Tymczasowo przywrócono działającą wersję v0.1, następnie ponownie przygotowano v0.2 do testu z krótkim naciśnięciem przycisku zasilania po wgraniu.
 - Hipoteza: urządzenie pozostawało wyłączone po uploadzie. Przyczyna niepotwierdzona dla v0.2; jeśli problem wystąpi po włączeniu, trzeba odczytać log COM6.
-- Następny krok: przetestować v0.2 po krótkim włączeniu przyciskiem. Jeśli nadal brak ekranu, przejść na rozdzielne testy dotyku i Wi-Fi.
+- Ponowny test v0.2 zakończył się sukcesem: użytkownik potwierdził działanie dotyku i skanowania Wi-Fi.
+- Czarny ekran najprawdopodobniej wynikał ze stanu zasilania, ale bez zarejestrowanego logu startowego nie uznajemy tej przyczyny za definitywnie potwierdzoną.
 
 Żaden etap niezakończony testem sprzętowym nie jest oznaczany jako PASS.
