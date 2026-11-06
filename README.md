@@ -4,7 +4,7 @@ Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
 
 ## Status
 
-v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: PASS** dla dotyku i skanowania Wi-Fi na rzeczywistym Tab5. **v0.3: połączenie z Wi-Fi skonfigurowane na ekranie — PASS pierwszego połączenia (2026-11-06).** Automatyczne połączenie po restarcie — PASS, aktualny IP DHCP 192.168.1.38. v0.4-preflight zawiera ekran odczytu partycji OTA i test AI Bridge; kompilacja oraz test na Tab5 PENDING. Aktualizacje OTA i integracja UPS nie są jeszcze wdrożone.
+v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: PASS** dla dotyku i skanowania Wi-Fi na rzeczywistym Tab5. **v0.3: połączenie z Wi-Fi skonfigurowane na ekranie — PASS pierwszego połączenia (2026-11-06).** Automatyczne połączenie po restarcie — PASS, aktualny IP DHCP 192.168.1.38. v0.4-preflight: test sprzętowy PASS; aktywna app0 i zapasowa app1 mają po 1280 KiB, boot=running, AI Bridge HTTP 200. Aktualizacje OTA i integracja UPS nie są jeszcze wdrożone.
 
 **Zasada:** gałąź `main` pozostaje stabilna; zmiany z gałęzi roboczych są scalane wyłącznie po zatwierdzeniu.
 
@@ -67,3 +67,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 
 Po BUILD SUCCESS wgrywaj przez dotychczasowy port COM6. Do zatwierdzenia
 testu sprzętowego zachowujemy możliwość powrotu do działającej v0.3.
+
+## Weryfikacja partycji przed OTA
+
+**STOP: nie wdrażaj jeszcze firmware OTA i nie zmieniaj `board_build.partitions`.**
+Sprzętowa diagnostyka pokazała sloty po 1280 KiB (układ 4 MB),
+mimo że Tab5 ma 16 MB Flash. Audyt bez ingerencji w urządzenie:
+
+```powershell
+git pull --ff-only
+& "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" .\scripts\audit-partitions.py
+```
+
+Jeśli nie ma `partitions.bin`, najpierw wykonaj zwykły Build
+(`scripts/build-windows.ps1`). **Na razie bez Upload.**
