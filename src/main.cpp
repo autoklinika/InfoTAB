@@ -37,7 +37,7 @@ constexpr uint32_t HOME_REFRESH_MS = 5000;
 constexpr uint32_t DASH_REFRESH_MS = 8000;
 constexpr const char* BRIDGE_HEALTH = "http://192.168.1.100:8080/health";
 
-enum class Page { Dashboard, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
+enum class Page { Dashboard, Power, NetworkInfo, Service, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
 struct NetworkEntry {
     String ssid;
     int rssi = -100;
@@ -172,94 +172,285 @@ void pollAiBridge() {
 
 // Static screen elements are drawn only when navigating to this page.
 // Dynamic values refresh in small rectangles; NO fillScreen() on any timer.
+// InfoTAB v0.7: restrained industrial HMI, 4 horizontal swipe pages.
+// Only page changes clear the whole LCD. Telemetry changes repaint values.
+static constexpr uint16_t UI_BG = 0x0842;    // charcoal
+static constexpr uint16_t UI_CARD = 0x10C3;  // raised graphite
+static constexpr uint16_t UI_BORDER = 0x2945;
+static constexpr uint16_t UI_WHITE = 0xE71C;
+static constexpr uint16_t UI_MUTED = 0x8C71;
+static constexpr uint16_t UI_ACCENT = 0x65D1; // muted teal
+static constexpr uint16_t UI_GOOD = 0x7E2E;
+static constexpr uint16_t UI_WARNING = 0xED08;
+
+bool mainPage(Page p) {
+    return p == Page::Dashboard || p == Page::Power ||
+           p == Page::NetworkInfo || p == Page::Service;
+}
+int mainPageIndex(Page p) {
+    switch (p) {
+        case Page::Dashboard: return 0;
+        case Page::Power: return 1;
+        case Page::NetworkInfo: return 2;
+        case Page::Service: return 3;
+        default: return -1;
+    }
+}
+Page mainPageByIndex(int idx) {
+    static constexpr Page pages[] = {
+        Page::Dashboard, Page::Power, Page::NetworkInfo, Page::Service
+    };
+    return pages[constrain(idx, 0, 3)];
+}
+void uiText(int x, int y, const String& s, uint16_t color,
+            int scale = 2, uint16_t background = UI_CARD) {
+    M5.Display.setTextColor(color, background);
+    M5.Display.setTextSize(scale);
+    M5.Display.setCursor(x, y);
+    M5.Display.print(s);
+}
+void valueAt(int x, int y, int w, int h, const String& s,
+             uint16_t color = UI_WHITE, int scale = 3,
+             uint16_t background = UI_CARD) {
+    M5.Display.fillRect(x, y, w, h, background);
+    uiText(x, y + 3, s, color, scale, background);
+}
+void panel(int x, int y, int w, int h) {
+    M5.Display.fillRoundRect(x, y, w, h, 12, UI_CARD);
+    M5.Display.drawRoundRect(x, y, w, h, 12, UI_BORDER);
+}
+void rule(int x, int y, int w) {
+    M5.Display.drawFastHLine(x, y, w, UI_BORDER);
+}
+void tabShell(const char* title, int active) {
+    M5.Display.fillScreen(UI_BG);
+    uiText(34, 27, "InfoTAB", UI_WHITE, 3, UI_BG);
+    uiText(305, 34, title, UI_MUTED, 2, UI_BG);
+    uiText(1064, 36, "v0.7  /  LAN", UI_MUTED, 2, UI_BG);
+    M5.Display.drawFastHLine(32, 85, displayWidth - 64, UI_BORDER);
+    M5.Display.drawFastHLine(32, 622, displayWidth - 64, UI_BORDER);
+
+    static const char* labels[] = {"START", "UPS", "SIEC / AI", "SERWIS"};
+    for (int i = 0; i < 4; ++i) {
+        const int x = 32 + i * 307;
+        const bool selected = active == i;
+        if (selected) M5.Display.fillRoundRect(x, 641, 283, 58, 8, UI_CARD);
+        uiText(x + 36, 661, labels[i], selected ? UI_WHITE : UI_MUTED,
+               2, selected ? UI_CARD : UI_BG);
+        if (selected) M5.Display.fillRect(x + 20, 696, 242, 3, UI_ACCENT);
+    }
+}
+String connectionStatus() {
+    return connected() ? "POLACZONO" : "BRAK WIFI";
+}
+String upsState() {
+    if (!ups.valid) return "BRAK DANYCH Z UPS";
+    if (ups.modeCode == 4) return "ZASILANIE PRAWIDLOWE";
+    return String("TRYB UPS: ") + String(ups.modeCode);
+}
+uint16_t upsStateColor() {
+    if (!ups.valid) return UI_WARNING;
+    return ups.modeCode == 4 ? UI_GOOD : UI_WARNING;
+}
+void progressBar(int x, int y, int width, int pct, uint16_t color) {
+    M5.Display.fillRoundRect(x, y, width, 10, 4, UI_BORDER);
+    if (pct >= 0 && pct <= 100) {
+        const int fill = (pct * width) / 100;
+        if (fill > 0) M5.Display.fillRoundRect(x, y, fill, 10, 4, color);
+    }
+}
+void drawOverviewValues() {
+    valueAt(59, 184, 724, 58, upsState(), upsStateColor(), 3);
+    valueAt(60, 376, 208, 64,
+            ups.valid ? String(ups.batteryPct) + "%" : "--",
+            ups.valid ? UI_GOOD : UI_WARNING, 4);
+    valueAt(322, 376, 208, 64,
+            ups.valid ? String(ups.loadPct) + "%" : "--",
+            UI_WHITE, 4);
+    valueAt(585, 376, 210, 64,
+            ups.valid ? String(ups.runtimeSeconds / 60) + " min" : "--",
+            UI_WHITE, 3);
+    valueAt(873, 212, 340, 55,
+            aiBridgeChecked ? (aiBridgeOk ? "ONLINE" : "OFFLINE") : "SPRAWDZANIE",
+            aiBridgeOk ? UI_GOOD : UI_WARNING, 3);
+    valueAt(873, 439, 340, 43, connected() ? WiFi.localIP().toString() :
+            String("BRAK POLACZENIA"), connected() ? UI_WHITE : UI_WARNING, 2);
+}
+void drawOverview() {
+    tabShell("PRZEGLAD", 0);
+    panel(32, 110, 788, 156);
+    uiText(59, 133, "STAN ZASILANIA", UI_MUTED, 2);
+    panel(32, 283, 248, 259);
+    panel(294, 283, 248, 259);
+    panel(556, 283, 264, 259);
+    uiText(60, 310, "BATERIA", UI_MUTED);
+    uiText(322, 310, "OBCIAZENIE", UI_MUTED);
+    uiText(583, 310, "CZAS UPS*", UI_MUTED);
+    rule(60, 459, 181); rule(322, 459, 181); rule(583, 459, 195);
+    uiText(60, 486, "POZIOM", UI_MUTED);
+    uiText(322, 486, "WYJSCIE", UI_MUTED);
+    uiText(583, 486, "*SZACUNEK", UI_MUTED);
+    panel(844, 110, 404, 205);
+    uiText(873, 141, "AI PLATFORM", UI_MUTED);
+    uiText(873, 278, "AI Bridge", UI_MUTED);
+    panel(844, 331, 404, 211);
+    uiText(873, 359, "INFOTAB / SIEC", UI_MUTED);
+    uiText(873, 498, "Wi-Fi  /  2.4 GHz", UI_MUTED);
+    uiText(42, 570, "Modbus TCP  /  192.168.1.102:502", UI_MUTED, 2, UI_BG);
+    drawOverviewValues();
+}
+void drawPowerValues() {
+    valueAt(63, 208, 504, 64, ups.valid ?
+            String(ups.inputVoltTenths / 10.0f, 1) + " V" : "--",
+            UI_WHITE, 4);
+    valueAt(670, 208, 506, 64, ups.valid ?
+            String(ups.outputVoltTenths / 10.0f, 1) + " V" : "--",
+            UI_WHITE, 4);
+    valueAt(63, 435, 170, 51, ups.valid ?
+            String(ups.batteryPct) + "%" : "--", UI_GOOD, 3);
+    valueAt(670, 435, 185, 51, ups.valid ?
+            String(ups.loadPct) + "%" : "--", UI_WHITE, 3);
+    M5.Display.fillRect(63, 501, 499, 12, UI_CARD);
+    M5.Display.fillRect(670, 501, 500, 12, UI_CARD);
+    progressBar(63, 501, 499, ups.valid ? ups.batteryPct : -1, UI_GOOD);
+    progressBar(670, 501, 499, ups.valid ? ups.loadPct : -1, UI_ACCENT);
+    valueAt(63, 553, 510, 32,
+            ups.valid ? String("Rezerwa: ") + String(ups.runtimeSeconds / 60) +
+            " min (szacunek UPS)" : "Brak pomiaru", UI_MUTED, 2, UI_BG);
+    valueAt(670, 553, 495, 32,
+            ups.valid ? String("Wyjscie: ") +
+            String(ups.outputHzTenths / 10.0f, 1) + " Hz" : "Brak pomiaru",
+            UI_MUTED, 2, UI_BG);
+}
+void drawPower() {
+    tabShell("PARAMETRY UPS", 1);
+    panel(32, 111, 576, 234);
+    panel(639, 111, 609, 234);
+    uiText(63, 147, "NAPIECIE WEJSCIOWE", UI_MUTED);
+    uiText(670, 147, "NAPIECIE WYJSCIOWE", UI_MUTED);
+    rule(63, 303, 501); rule(670, 303, 529);
+    uiText(63, 311, "Modbus 132  /  V", UI_MUTED);
+    uiText(670, 311, "Modbus 147  /  V", UI_MUTED);
+    panel(32, 364, 576, 176);
+    panel(639, 364, 609, 176);
+    uiText(63, 389, "BATERIA", UI_MUTED);
+    uiText(670, 389, "OBCIAZENIE UPS", UI_MUTED);
+    drawPowerValues();
+}
+void drawNetworkValues() {
+    valueAt(63, 209, 519, 61, connectionStatus(),
+            connected() ? UI_GOOD : UI_WARNING, 3);
+    valueAt(63, 336, 520, 42,
+            connected() ? WiFi.localIP().toString() : String("--"),
+            UI_WHITE, 2);
+    valueAt(63, 438, 519, 42,
+            connected() ? String(WiFi.RSSI()) + " dBm" : String("--"),
+            UI_WHITE, 2);
+    valueAt(670, 209, 529, 61,
+            aiBridgeChecked ? (aiBridgeOk ? "ONLINE" : "OFFLINE") :
+            "SPRAWDZANIE", aiBridgeOk ? UI_GOOD : UI_WARNING, 3);
+    valueAt(670, 351, 520, 48,
+            ups.valid ? "MODBUS POLACZONY" : "MODBUS NIEDOSTEPNY",
+            ups.valid ? UI_GOOD : UI_WARNING, 2);
+}
+void drawNetwork() {
+    tabShell("SIEC I KOMUNIKACJA", 2);
+    panel(32, 110, 576, 422);
+    panel(639, 110, 609, 422);
+    uiText(63, 143, "LACZNOSC WI-FI", UI_MUTED);
+    uiText(63, 299, "IP URZADZENIA", UI_MUTED);
+    uiText(63, 403, "SYGNAL", UI_MUTED);
+    uiText(670, 143, "AI PLATFORM", UI_MUTED);
+    rule(670, 304, 529);
+    uiText(670, 314, "UPS / MODBUS TCP", UI_MUTED);
+    uiText(670, 424, "192.168.1.102:502  /  FC03", UI_MUTED);
+    M5.Display.fillRoundRect(42, 555, 369, 53, 9, UI_CARD);
+    uiText(64, 573, "USTAWIENIA WI-FI", UI_ACCENT);
+    uiText(473, 573, "Adres AI: 192.168.1.100", UI_MUTED, 2, UI_BG);
+    drawNetworkValues();
+}
+void drawServiceValues() {
+    valueAt(63, 205, 520, 58, "InfoTAB v0.7", UI_WHITE, 3);
+    valueAt(670, 205, 520, 58, otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
+            otaArmed ? UI_GOOD : UI_MUTED, 3);
+    valueAt(63, 340, 520, 38,
+            String("Uptime: ") + String(millis() / 60000) + " min", UI_WHITE, 2);
+}
+void drawService() {
+    tabShell("SERWIS", 3);
+    panel(32, 110, 576, 324);
+    panel(639, 110, 609, 324);
+    uiText(63, 146, "OPROGRAMOWANIE", UI_MUTED);
+    uiText(63, 297, "CZAS PRACY", UI_MUTED);
+    uiText(670, 146, "AKTUALIZACJA WI-FI", UI_MUTED);
+    uiText(670, 298, "Sesja OTA tylko na zadanie", UI_MUTED);
+    M5.Display.fillRoundRect(43, 455, 368, 76, 9, UI_CARD);
+    M5.Display.fillRoundRect(448, 455, 368, 76, 9, UI_CARD);
+    M5.Display.fillRoundRect(853, 455, 366, 76, 9, UI_CARD);
+    uiText(66, 482, "OTA WIFI", UI_ACCENT);
+    uiText(472, 482, "DIAGNOSTYKA", UI_WHITE);
+    uiText(877, 482, "KONFIG. WIFI", UI_WHITE);
+    uiText(42, 575, "Przesun lewo / prawo, aby zmienic ekran.",
+           UI_MUTED, 2, UI_BG);
+    drawServiceValues();
+}
 void drawDashboardValues() {
-    const bool good = ups.valid;
-    M5.Display.fillRect(52, 183, 742, 48, TFT_BLACK);
-    uint16_t statusColor = good && ups.modeCode == 4 ? TFT_GREEN : TFT_YELLOW;
-    String state;
-    if (!good) state = "MODBUS: BRAK DANYCH";
-    else if (ups.modeCode == 4) state = "UPS: TRYB NORMALNY";
-    else state = String("UPS: TRYB ") + String(ups.modeCode) + " (sprawdz)";
-    writeText(53, 188, state, statusColor, 3);
-
-    M5.Display.fillRect(53, 312, 206, 67, TFT_BLACK);
-    M5.Display.fillRect(314, 312, 205, 67, TFT_BLACK);
-    M5.Display.fillRect(565, 312, 240, 67, TFT_BLACK);
-    writeText(53, 320, good ? String(ups.batteryPct) + "%" : "--",
-              good ? TFT_GREEN : TFT_YELLOW, 4);
-    writeText(314, 320, good ? String(ups.loadPct) + "%" : "--",
-              good ? TFT_WHITE : TFT_YELLOW, 4);
-    writeText(565, 320, good ? String(ups.runtimeSeconds / 60) + " min" : "--",
-              good ? TFT_CYAN : TFT_YELLOW, 4);
-
-    M5.Display.fillRect(53, 471, 232, 53, TFT_BLACK);
-    M5.Display.fillRect(320, 471, 250, 53, TFT_BLACK);
-    writeText(53, 476, good ? String(ups.inputVoltTenths / 10.0f, 1) + " V" : "--",
-              good ? TFT_WHITE : TFT_YELLOW, 3);
-    writeText(320, 476, good ? String(ups.outputVoltTenths / 10.0f, 1) + " V" : "--",
-              good ? TFT_WHITE : TFT_YELLOW, 3);
-
-    M5.Display.fillRect(865, 210, 355, 49, TFT_BLACK);
-    writeText(867, 215, aiBridgeChecked ?
-             (aiBridgeOk ? "ONLINE" : "OFFLINE") : "SPRAWDZANIE",
-             aiBridgeOk ? TFT_GREEN : TFT_YELLOW, 3);
-    M5.Display.fillRect(865, 330, 355, 46, TFT_BLACK);
-    writeText(867, 338, connected() ? WiFi.localIP().toString() :
-              String("BRAK WI-FI"), connected() ? TFT_CYAN : TFT_YELLOW, 2);
-    M5.Display.fillRect(865, 459, 355, 50, TFT_BLACK);
-    writeText(867, 466, connected() ? String(WiFi.RSSI()) + " dBm" :
-              String("BRAK SYGNALU"), TFT_WHITE, 2);
-    M5.Display.fillRect(53, 547, 740, 26, TFT_BLACK);
-    writeText(53, 550, "Zrodlo: MODBUS TCP 192.168.1.102:502 | FC03", TFT_LIGHTGREY, 2);
+    switch(page) {
+        case Page::Dashboard: drawOverviewValues(); break;
+        case Page::Power: drawPowerValues(); break;
+        case Page::NetworkInfo: drawNetworkValues(); break;
+        case Page::Service: drawServiceValues(); break;
+        default: break;
+    }
 }
-
-void drawDashboard() {
-    header("PULPIT SYSTEMOWY   /   UPS + AI PLATFORM");
-    M5.Display.drawRoundRect(32, 110, 788, 478, 14, TFT_DARKCYAN);
-    M5.Display.drawRoundRect(844, 110, displayWidth - 876, 478, 14, TFT_DARKGREY);
-    M5.Display.fillRect(34, 112, 784, 7, TFT_DARKCYAN);
-    M5.Display.fillRect(846, 112, displayWidth - 880, 7, TFT_DARKGREEN);
-    writeText(53, 138, "ZASILANIE AWARYJNE", TFT_CYAN, 3);
-    writeText(53, 266, "BATERIA", TFT_LIGHTGREY);
-    writeText(314, 266, "OBCIAZENIE", TFT_LIGHTGREY);
-    writeText(565, 266, "CZAS UPS*", TFT_LIGHTGREY);
-    M5.Display.drawFastHLine(54, 407, 733, TFT_DARKGREY);
-    writeText(53, 428, "WEJSCIE", TFT_LIGHTGREY);
-    writeText(320, 428, "WYJSCIE", TFT_LIGHTGREY);
-    writeText(563, 428, "*szacowany czas", TFT_LIGHTGREY, 2);
-    writeText(867, 145, "AI PLATFORM", TFT_CYAN, 3);
-    writeText(867, 185, "AI Bridge /health", TFT_LIGHTGREY);
-    M5.Display.drawFastHLine(867, 289, displayWidth - 906, TFT_DARKGREY);
-    writeText(867, 302, "ADRES INFOTAB", TFT_LIGHTGREY);
-    M5.Display.drawFastHLine(867, 414, displayWidth - 906, TFT_DARKGREY);
-    writeText(867, 427, "SYGNAL WI-FI", TFT_LIGHTGREY);
-    button(32, 608, 230, 82, "ODSWIEZ", TFT_DARKCYAN, 2);
-    button(285, 608, 230, 82, "SIEC WIFI", TFT_DARKGREEN, 2);
-    button(538, 608, 230, 82, "OTA WIFI", TFT_NAVY, 2);
-    button(791, 608, 235, 82, "OTA DIAG", TFT_DARKGREY, 2);
-    writeText(1040, 636, "v0.6", TFT_LIGHTGREY, 2);
-    drawDashboardValues();
-}
-
+void drawDashboard() { drawOverview(); }
 void refreshDashboard() {
     pollUpsReadOnly();
     pollAiBridge();
     lastDashboardRefresh = millis();
-    if (page == Page::Dashboard) drawDashboardValues();
+    if (mainPage(page)) drawDashboardValues();
 }
-
+void openMainPage(Page target) {
+    if (!mainPage(target) || page == target) return;
+    page = target;
+    render();
+}
+bool handleNavigationTap(int x, int y) {
+    if (!mainPage(page) || y < 632 || y > 708) return false;
+    for (int i = 0; i < 4; ++i) {
+        const int left = 32 + i * 307;
+        if (inside(x, y, left, 632, 285, 76)) {
+            openMainPage(mainPageByIndex(i));
+            return true;
+        }
+    }
+    return false;
+}
 void handleDashboard(int x, int y) {
-    if (inside(x, y, 32, 608, 230, 82)) {
-        refreshDashboard();
-    } else if (inside(x, y, 285, 608, 230, 82)) {
-        page = Page::Home;
+    if (handleNavigationTap(x,y)) return;
+    // Overview is read-only; use horizontal swipe or bottom tabs to navigate.
+}
+void handlePower(int x, int y) {
+    handleNavigationTap(x,y);
+}
+void handleNetworkInfo(int x, int y) {
+    if (handleNavigationTap(x,y)) return;
+    if (inside(x,y,42,555,369,53)) {
+        page=Page::Home;
         render();
-    } else if (inside(x, y, 538, 608, 230, 82)) {
-        page = Page::OtaUpload;
+    }
+}
+void handleService(int x, int y) {
+    if (handleNavigationTap(x,y)) return;
+    if (inside(x,y,43,455,368,76)) {
+        page=Page::OtaUpload;
         render();
-    } else if (inside(x, y, 791, 608, 235, 82)) {
-        page = Page::OtaDiag;
-        infoMessage = "Odczyt partycji - bez zmiany Flash.";
+    } else if (inside(x,y,448,455,368,76)) {
+        page=Page::OtaDiag;
+        infoMessage="Odczyt partycji - bez zmiany Flash.";
+        render();
+    } else if (inside(x,y,853,455,366,76)) {
+        page=Page::Home;
         render();
     }
 }
@@ -525,7 +716,7 @@ void handleOtaUpload(int x, int y) {
     if (otaInProgress) return;
     if (inside(x, y, 46, 612, 263, 78)) {
         stopOta();
-        page = Page::Dashboard;
+        page = Page::Service;
         render();
     } else if (inside(x, y, 331, 612, 403, 78)) {
         if (otaArmed) {
@@ -548,6 +739,9 @@ void drawConnecting() {
 void render() {
     switch (page) {
         case Page::Dashboard: drawDashboard(); break;
+        case Page::Power: drawPower(); break;
+        case Page::NetworkInfo: drawNetwork(); break;
+        case Page::Service: drawService(); break;
         case Page::Home: drawHome(); break;
         case Page::Networks: drawNetworks(); break;
         case Page::Password: drawPassword(); break;
@@ -672,7 +866,7 @@ void selectNetwork(int index) {
 
 void handleHome(int x, int y) {
     if (inside(x, y, 450, 557, 330, 67)) {
-        page = Page::Dashboard;
+        page = Page::NetworkInfo;
         render();
     } else if (inside(x, y, 45, 557, 375, 67)) {
         page = Page::OtaDiag;
@@ -691,7 +885,7 @@ void handleHome(int x, int y) {
 
 void handleOtaDiag(int x, int y) {
     if (inside(x, y, 45, 611, 270, 72)) {
-        page = Page::Home;
+        page = Page::Service;
         infoMessage = "";
         render();
     } else if (inside(x, y, 348, 611, 420, 72)) {
