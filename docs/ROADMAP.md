@@ -42,10 +42,11 @@
 - [x] Przygotowano osobny wariant kompilacji `infotab_tab5_16mb_audit` z jawnie wskazanym CSV 16 MB; BUILD PASS (2026-11-06, 02:03)
 - [x] Potwierdzono lokalnie dwa sloty OTA po 6400 KiB, firmware 932416 B, wolne 5621184 B w każdym (2026-11-06)
 - [x] Fizyczna pamięć Flash potwierdzona przez COM6: 16 MB, ESP32-P4 rev. 1.3; `esptool flash-id` READ ONLY PASS (2026-11-06)
-- [x] Dodano skrypt backupu pełnych 16 MiB do prywatnego katalogu Windows + walidację rozmiaru, SHA-256 i starego layoutu (test na sprzęcie PENDING)
+- [x] Skrypt backupu pełnych 16 MiB i walidacja rozmiaru, SHA-256 oraz starego layoutu: PASS na rzeczywistym sprzęcie (2026-11-06)
 - [x] Potwierdzono pełny, lokalny backup 16 MiB: `BACKUP VERIFIED - READ ONLY PASS`, SHA-256, stary układ partycji (2026-11-06). Kopia prywatna, nie publikować.
-- [x] Przygotowano lokalny read-only audyt nakładania starych partycji na nowe oraz odczyt eFuse/ROM security; test Windows PENDING
-- [ ] Potwierdzić stan Secure Boot / Flash Encryption i ocenę danych w starych partycjach przed migracją
+- [x] Read-only audyt prywatnej kopii i eFuse/ROM: PASS techniczny (2026-11-06), wykryto NON-ERASED w starych app1/spiffs/coredump
+- [x] Secure Boot: Disabled, Flash Encryption: Disabled, SPI_BOOT_CRYPT_CNT=0, flags=0 — potwierdzone na ESP32-P4 (2026-11-06)
+- [ ] Ustalić, czy dane w starym SPIFFS są użytkowe; nie zakładać, że NON-ERASED oznacza dane do odrzucenia
 - [ ] Sprawdzić stan bootloadera i przygotować plan bezpiecznej migracji USB bez pełnego kasowania Flash
 - [ ] Plan migracji partycji do pełnej przestrzeni 16 MB: backup/odzyskanie NVS, USB recovery, test rollback
 - [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
