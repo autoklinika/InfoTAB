@@ -38,7 +38,8 @@
 - [x] Dodano ręczny 5-minutowy odbiornik OTA z losowym hasłem na ekranie oraz uploader Windows.
 - [ ] Windows Build v0.6 i kontrola, czy binarka mieści się w 1280 KiB.
 - [ ] Uruchomienie Tab5 v0.6 przez USB-C, odczyt Modbus i brak migania: PASS.
-- [ ] Aktualizacja przez Wi-Fi: początkowy test FAILED na etapie TCP callback (`No response from device`), poprawiono Windows uploader (stały 3233, routing IP) i przygotowano ograniczoną regułę zapory; RETEST PENDING.
+- [x] Transfer OTA przez Wi-Fi: `WIFI OTA TRANSFER SUCCESS` (potwierdzenie użytkownika 2026-11-06). Autoryzacja/połączenie TCP i przesłanie obrazu zakończone sukcesem.
+- [ ] Potwierdzić boot nowego firmware po OTA, zachowanie Wi-Fi, odczyt Modbus oraz brak migania LCD.
 - [ ] Produkcyjne uwierzytelnianie/podpisy i rollback: późniejszy etap.
 
 ## Etap 3: telemetria UPS — główny priorytet
