@@ -239,15 +239,15 @@ bool mainPage(Page p) {
 int mainPageIndex(Page p) {
     switch (p) {
         case Page::Dashboard: return 0;
-        case Page::Power: return 1;
-        case Page::NetworkInfo: return 2;
+        case Page::NetworkInfo: return 1;
+        case Page::Power: return 2;
         case Page::Service: return 3;
         default: return -1;
     }
 }
 Page mainPageByIndex(int idx) {
     static constexpr Page pages[] = {
-        Page::Dashboard, Page::Power, Page::NetworkInfo, Page::Service
+        Page::Dashboard, Page::NetworkInfo, Page::Power, Page::Service
     };
     return pages[constrain(idx, 0, 3)];
 }
@@ -271,22 +271,18 @@ void panel(int x, int y, int w, int h) {
 void rule(int x, int y, int w) {
     M5.Display.drawFastHLine(x, y, w, UI_BORDER);
 }
-void tabShell(const char* title, int active) {
+// No topbar. Content occupies the whole area above bottom navigation.
+void tabShell(const char* /*module*/, int active) {
     M5.Display.fillScreen(UI_BG);
-    uiText(34, 27, "InfoTAB", UI_WHITE, 3, UI_BG);
-    uiText(305, 34, title, UI_MUTED, 2, UI_BG);
-    uiText(1064, 36, "v0.8  /  LAN", UI_MUTED, 2, UI_BG);
-    M5.Display.drawFastHLine(32, 85, displayWidth - 64, UI_BORDER);
-    M5.Display.drawFastHLine(32, 622, displayWidth - 64, UI_BORDER);
-
-    static const char* labels[] = {"START", "UPS", "SIEC / AI", "SERWIS"};
+    M5.Display.drawFastHLine(32, 624, displayWidth - 64, UI_BORDER);
+    static const char* labels[] = {"AI PLATFORM", "NAS", "UPS", "USTAWIENIA"};
     for (int i = 0; i < 4; ++i) {
         const int x = 32 + i * 307;
         const bool selected = active == i;
-        if (selected) M5.Display.fillRoundRect(x, 641, 283, 58, 8, UI_CARD);
-        uiText(x + 36, 661, labels[i], selected ? UI_WHITE : UI_MUTED,
+        if (selected) M5.Display.fillRoundRect(x, 640, 284, 60, 9, UI_CARD);
+        uiText(x + 27, 663, labels[i], selected ? UI_WHITE : UI_MUTED,
                2, selected ? UI_CARD : UI_BG);
-        if (selected) M5.Display.fillRect(x + 20, 696, 242, 3, UI_ACCENT);
+        if (selected) M5.Display.fillRect(x + 16, 697, 252, 3, UI_ACCENT);
     }
 }
 String connectionStatus() {
@@ -308,44 +304,49 @@ void progressBar(int x, int y, int width, int pct, uint16_t color) {
         if (fill > 0) M5.Display.fillRoundRect(x, y, fill, 10, 4, color);
     }
 }
+// AI Platform page: only fields actually reported by GET /health.
+// Separate tiles do not imply that a not-checked Ollama component is healthy.
 void drawOverviewValues() {
-    valueAt(59, 184, 724, 58, upsState(), upsStateColor(), 3);
-    valueAt(60, 376, 208, 64,
-            ups.valid ? String(ups.batteryPct) + "%" : "--",
-            ups.valid ? UI_GOOD : UI_WARNING, 4);
-    valueAt(322, 376, 208, 64,
-            ups.valid ? String(ups.loadPct) + "%" : "--",
-            UI_WHITE, 4);
-    valueAt(585, 376, 210, 64,
-            ups.valid ? String(ups.runtimeSeconds / 60) + " min" : "--",
+    valueAt(57, 154, 540, 65,
+        aiBridgeChecked ? (aiBridgeOk ? "ONLINE" : "OFFLINE") : "SPRAWDZANIE",
+        aiBridgeOk ? UI_GOOD : UI_WARNING, 4);
+    valueAt(675, 154, 535, 65, aiBridgeOk ? String("v") + aiBridgeVersion : "--",
             UI_WHITE, 3);
-    valueAt(873, 212, 340, 55,
-            aiBridgeChecked ? (aiBridgeOk ? "ONLINE" : "OFFLINE") : "SPRAWDZANIE",
-            aiBridgeOk ? UI_GOOD : UI_WARNING, 3);
-    valueAt(873, 439, 340, 43, connected() ? WiFi.localIP().toString() :
-            String("BRAK POLACZENIA"), connected() ? UI_WHITE : UI_WARNING, 2);
+    valueAt(57, 440, 540, 58,
+        aiBridgeOk ? aiDatabaseState : "--",
+        aiDatabaseState == "ok" ? UI_GOOD : UI_WARNING, 3);
+    valueAt(675, 440, 535, 58,
+        aiBridgeOk ? (aiOllamaState == "not_checked" ?
+            "NIE SPRAWDZONO" : aiOllamaState) : "--",
+        UI_WHITE, 2);
 }
 void drawOverview() {
-    tabShell("PRZEGLAD", 0);
-    panel(32, 110, 788, 156);
-    uiText(59, 133, "STAN ZASILANIA", UI_MUTED, 2);
-    panel(32, 283, 248, 259);
-    panel(294, 283, 248, 259);
-    panel(556, 283, 264, 259);
-    uiText(60, 310, "BATERIA", UI_MUTED);
-    uiText(322, 310, "OBCIAZENIE", UI_MUTED);
-    uiText(583, 310, "CZAS UPS*", UI_MUTED);
-    rule(60, 459, 181); rule(322, 459, 181); rule(583, 459, 195);
-    uiText(60, 486, "POZIOM", UI_MUTED);
-    uiText(322, 486, "WYJSCIE", UI_MUTED);
-    uiText(583, 486, "*SZACUNEK", UI_MUTED);
-    panel(844, 110, 404, 205);
-    uiText(873, 141, "AI PLATFORM", UI_MUTED);
-    uiText(873, 278, "AI Bridge", UI_MUTED);
-    panel(844, 331, 404, 211);
-    uiText(873, 359, "INFOTAB / SIEC", UI_MUTED);
-    uiText(873, 498, "Wi-Fi  /  2.4 GHz", UI_MUTED);
-    uiText(42, 570, "Modbus TCP  /  192.168.1.102:502", UI_MUTED, 2, UI_BG);
+    tabShell("", 0);
+    panel(32, 24, 595, 265);
+    panel(651, 24, 597, 265);
+    panel(32, 308, 595, 266);
+    panel(651, 308, 597, 266);
+    uiText(57, 53, "AI PLATFORM", UI_WHITE, 3);
+    uiText(57, 105, "STAN POLACZENIA", UI_MUTED, 2);
+    rule(57, 246, 540);
+    uiText(57, 259, "Host: 192.168.1.100", UI_MUTED, 1);
+
+    uiText(675, 53, "AI BRIDGE", UI_WHITE, 3);
+    uiText(675, 105, "WERSJA API", UI_MUTED);
+    rule(675, 246, 535);
+    uiText(675, 259, "GET /health  |  HTTP 200", UI_MUTED, 1);
+
+    uiText(57, 337, "BAZA DANYCH", UI_WHITE, 3);
+    uiText(57, 391, "STAN Z API", UI_MUTED);
+    rule(57, 529, 540);
+    uiText(57, 540, "Wartosc zwracana przez AI Bridge", UI_MUTED, 1);
+
+    uiText(675, 337, "OLLAMA", UI_WHITE, 3);
+    uiText(675, 391, "KONTROLA KOMPONENTU", UI_MUTED);
+    rule(675, 529, 535);
+    uiText(675, 540, "Brak kontroli nie oznacza awarii", UI_MUTED, 1);
+
+    uiText(42, 590, "DANE: 192.168.1.100:8080/health", UI_MUTED, 2, UI_BG);
     drawOverviewValues();
 }
 // Eight aligned tiles; each live measurement has its own light graphite card.
