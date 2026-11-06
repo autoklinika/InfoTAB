@@ -65,6 +65,14 @@ uint32_t lastHomeRefresh = 0;
 uint32_t lastDashboardRefresh = 0;
 bool aiBridgeOk = false;
 bool aiBridgeChecked = false;
+String aiBridgeVersion = "--";
+String aiDatabaseState = "--";
+String aiOllamaState = "--";
+bool nasChecked = false;
+bool nasHttps = false;
+bool nasQts = false;
+uint32_t nasLastSuccessAt = 0;
+
 
 struct UpsData {
     bool valid = false;
@@ -159,18 +167,56 @@ void pollUpsReadOnly() {
                   ups.outputVoltTenths, ups.runtimeSeconds);
 }
 
+// Extract a flat string property from the public AI Bridge /health JSON.
+// No credentials or extra dependencies. Unknown fields remain "--".
+String healthString(const String& body, const char* key) {
+    const String name = String("\"") + key + "\"";
+    int pos = body.indexOf(name);
+    if (pos < 0) return "--";
+    pos = body.indexOf(':', pos + name.length());
+    if (pos < 0) return "--";
+    pos = body.indexOf('"', pos + 1);
+    if (pos < 0) return "--";
+    int stop = body.indexOf('"', pos + 1);
+    if (stop < 0 || stop - pos > 40) return "--";
+    return body.substring(pos + 1, stop);
+}
 void pollAiBridge() {
     aiBridgeChecked = true;
     aiBridgeOk = false;
+    aiDatabaseState = "--";
+    aiOllamaState = "--";
+    aiBridgeVersion = "--";
     if (!connected()) return;
     NetworkClient client;
     HTTPClient http;
     http.setConnectTimeout(1000);
     http.setTimeout(1400);
     if (http.begin(client, String(BRIDGE_HEALTH))) {
-        aiBridgeOk = http.GET() == 200;
+        const int status = http.GET();
+        aiBridgeOk = status == 200;
+        if (aiBridgeOk) {
+            const String payload = http.getString();
+            aiBridgeVersion = healthString(payload, "version");
+            aiDatabaseState = healthString(payload, "database");
+            aiOllamaState = healthString(payload, "ollama");
+        }
         http.end();
     }
+}
+
+// Only reachability checks. Do not pretend they are QNAP storage/backup health.
+void pollNas() {
+    nasChecked = true;
+    nasHttps = false;
+    nasQts = false;
+    if (!connected()) return;
+    NetworkClient client;
+    nasHttps = client.connect("192.168.1.101", 443, 850);
+    client.stop();
+    nasQts = client.connect("192.168.1.101", 8080, 850);
+    client.stop();
+    if (nasHttps || nasQts) nasLastSuccessAt = millis();
 }
 
 // Static screen elements are drawn only when navigating to this page.
@@ -411,8 +457,9 @@ void drawDashboardValues() {
 }
 void drawDashboard() { drawOverview(); }
 void refreshDashboard() {
-    pollUpsReadOnly();
-    pollAiBridge();
+    if (page == Page::Dashboard) pollAiBridge();
+    else if (page == Page::NetworkInfo) pollNas();
+    else if (page == Page::Power) pollUpsReadOnly();
     lastDashboardRefresh = millis();
     if (mainPage(page)) drawDashboardValues();
 }
