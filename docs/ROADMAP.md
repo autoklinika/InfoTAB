@@ -28,6 +28,18 @@
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
+## InfoTAB v0.8 — GUI i OTA
+
+- [x] Projekt: ekran UPS w układzie 4×2 — osiem niezależnych kafelków.
+- [x] Rozjaśnione barwy tła, kart, obramowań i tekstu.
+- [x] Dodano szacowaną moc wyjściową z rejestru 156 (weryfikacja skali 0,1 kW PENDING); nie jest to pomiar poboru z sieci.
+- [x] OTA bez hasła, ale tylko po fizycznej aktywacji na InfoTAB przez 120 sekund.
+- [x] Nowy uploader Windows bez hasła; stary uploader zachowany na przejście z v0.7.
+- [ ] Kompilacja i OTA przejściowe v0.7→v0.8: PENDING.
+- [ ] Odbiór rozjaśnionego GUI i wszystkich kafelków na urządzeniu: PENDING.
+- [ ] Test kolejnej aktualizacji bez hasła, tylko podczas ręcznie aktywowanej sesji: PENDING.
+- [ ] Separacja sieci OTA i docelowe uwierzytelnianie/podpisy: później.
+
 ## Etap 3B: InfoTAB v0.7 — wieloekranowy HMI
 
 - [x] Dodano 4 ekrany główne: START / UPS / SIEC-AI / SERWIS.
