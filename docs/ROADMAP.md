@@ -8,7 +8,7 @@
 - [ ] Potwierdzenie logów portu szeregowego (115200 bps)
 - [ ] Potwierdzona rewizja sterownika ekranu na urządzeniu
 
-## Etap 1: ekran i HMI (v0.2 wstrzymana — czarny ekran po wgraniu)
+## Etap 1: ekran i HMI (v0.2: ponowny test po sprawdzeniu przycisku zasilania)
 - [ ] Test dotyku i orientacji (próba v0.2: czarny ekran, wymagane rozdzielenie testów)
 - [ ] Projekt graficzny ekranu InfoTAB
 - [ ] Obsługa błędów, watchdog, komunikaty stanu
@@ -33,9 +33,9 @@
 
 ## Incydent v0.2 — 2026-11-06
 
-- Użytkownik zgłosił czarny ekran po próbie v0.2.
-- Kod przywrócono na gałęzi roboczej do **dokładnie tej samej wersji v0.1**, która działała na urządzeniu.
-- Przyczyna nieustalona (brak logu bootowania z COM6); nie zgadujemy, czy winna jest inicjalizacja Wi-Fi, LCD czy proces uruchamiania.
-- Następny krok: potwierdzić powrót v0.1, następnie osobno testować dotyk i Wi-Fi.
+- Użytkownik zgłosił czarny ekran po próbie v0.2, ale v0.1 uruchomił się po naciśnięciu przycisku zasilania.
+- Tymczasowo przywrócono działającą wersję v0.1, następnie ponownie przygotowano v0.2 do testu z krótkim naciśnięciem przycisku zasilania po wgraniu.
+- Hipoteza: urządzenie pozostawało wyłączone po uploadzie. Przyczyna niepotwierdzona dla v0.2; jeśli problem wystąpi po włączeniu, trzeba odczytać log COM6.
+- Następny krok: przetestować v0.2 po krótkim włączeniu przyciskiem. Jeśli nadal brak ekranu, przejść na rozdzielne testy dotyku i Wi-Fi.
 
 Żaden etap niezakończony testem sprzętowym nie jest oznaczany jako PASS.
