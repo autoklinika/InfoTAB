@@ -1,210 +1,486 @@
 #include <Arduino.h>
 #include <M5Unified.h>
+#include <Preferences.h>
 #include <WiFi.h>
 
-// InfoTAB v0.2 — laboratory touchscreen + Wi-Fi scan.
-// The ESP32-P4 has no Wi-Fi radio. Tab5 connects to its onboard
-// ESP32-C6 via SDIO. Pin mapping is from the official M5Stack Tab5 example.
-// NO Wi-Fi password, network join, OTA or UPS commands in this firmware.
+// InfoTAB v0.3: Wi-Fi setup exclusively on the touchscreen.
+// Credentials are NEVER embedded in source, printed on Serial, or sent to GitHub.
+// The ESP32-P4 uses the ESP32-C6 Wi-Fi companion via M5Stack's SDIO pin mapping.
 
 namespace {
-constexpr gpio_num_t kSdioClk = GPIO_NUM_12;
-constexpr gpio_num_t kSdioCmd = GPIO_NUM_13;
-constexpr gpio_num_t kSdioD0 = GPIO_NUM_11;
-constexpr gpio_num_t kSdioD1 = GPIO_NUM_10;
-constexpr gpio_num_t kSdioD2 = GPIO_NUM_9;
-constexpr gpio_num_t kSdioD3 = GPIO_NUM_8;
-constexpr gpio_num_t kSdioRst = GPIO_NUM_15;
+constexpr gpio_num_t SDIO_CLK = GPIO_NUM_12;
+constexpr gpio_num_t SDIO_CMD = GPIO_NUM_13;
+constexpr gpio_num_t SDIO_D0  = GPIO_NUM_11;
+constexpr gpio_num_t SDIO_D1  = GPIO_NUM_10;
+constexpr gpio_num_t SDIO_D2  = GPIO_NUM_9;
+constexpr gpio_num_t SDIO_D3  = GPIO_NUM_8;
+constexpr gpio_num_t SDIO_RST = GPIO_NUM_15;
 
-constexpr int kLeft = 34;
-constexpr int kRight = 650;
-constexpr int kScanButtonWidth = 430;
-constexpr int kScanButtonHeight = 80;
-constexpr uint32_t kTouchRefreshMs = 100;
-constexpr uint32_t kLogUptimeMs = 10000;
+constexpr int MARGIN = 32;
+constexpr int MAX_NETWORKS = 32;
+constexpr int NETWORKS_PER_PAGE = 7;
+constexpr int KEY_GAP = 9;
+constexpr int KEY_HEIGHT = 51;
+constexpr int KEY_FIRST_Y = 313;
+constexpr uint32_t CONNECT_TIMEOUT_MS = 20000;
+constexpr uint32_t HOME_REFRESH_MS = 5000;
 
-int screenWidth = 0;
-int screenHeight = 0;
-int scanButtonX = 0;
-int scanButtonY = 0;
-uint32_t lastTouchRefresh = 0;
-uint32_t lastUptimeLog = 0;
-int lastTouchX = -1;
-int lastTouchY = -1;
-bool scanActive = false;
-bool wifiInitialized = false;
+enum class Page { Home, Networks, Password, Connecting };
+struct NetworkEntry {
+    String ssid;
+    int rssi = -100;
+    bool secured = true;
+};
+NetworkEntry networks[MAX_NETWORKS];
+int networkCount = 0;
+int networkPage = 0;
+int displayWidth = 1280;
+int displayHeight = 720;
 
-void writeText(int x, int y, const String& message, uint16_t color, int scale = 2) {
+Page page = Page::Home;
+String infoMessage;
+String savedSsid;
+String savedPassword;
+String pendingSsid;
+String pendingPassword;
+bool passwordSecure = true;
+bool upperCase = false;
+bool symbolMode = false;
+bool wifiReady = false;
+bool saveAfterSuccess = false;
+uint32_t connectionStart = 0;
+uint32_t lastHomeRefresh = 0;
+
+void logEvent(const char* event) {
+    // Deliberately never log SSIDs or passwords.
+    Serial.printf("[InfoTAB] %s\n", event);
+}
+
+bool inside(int x, int y, int bx, int by, int w, int h) {
+    return x >= bx && x < bx + w && y >= by && y < by + h;
+}
+
+void writeText(int x, int y, const String& value, uint16_t color, int scale = 2) {
     M5.Display.setTextColor(color, TFT_BLACK);
     M5.Display.setTextSize(scale);
     M5.Display.setCursor(x, y);
-    M5.Display.print(message);
+    M5.Display.print(value);
 }
 
-void drawScanButton() {
-    const uint16_t bg = scanActive ? TFT_DARKGREY : TFT_DARKCYAN;
-    M5.Display.fillRoundRect(scanButtonX, scanButtonY, kScanButtonWidth,
-                             kScanButtonHeight, 14, bg);
-    M5.Display.drawRoundRect(scanButtonX, scanButtonY, kScanButtonWidth,
-                             kScanButtonHeight, 14, TFT_WHITE);
+void button(int x, int y, int w, int h, const String& label,
+            uint16_t bg = TFT_DARKCYAN, int scale = 2) {
+    M5.Display.fillRoundRect(x, y, w, h, 12, bg);
+    M5.Display.drawRoundRect(x, y, w, h, 12, TFT_LIGHTGREY);
     M5.Display.setTextColor(TFT_WHITE, bg);
-    M5.Display.setTextSize(3);
-    M5.Display.setCursor(scanButtonX + 42, scanButtonY + 22);
-    M5.Display.print(scanActive ? "SKANOWANIE..." : "SKANUJ WI-FI");
+    M5.Display.setTextSize(scale);
+    M5.Display.setCursor(x + 14, y + (h - 16 * scale) / 2);
+    M5.Display.print(label);
 }
 
-void drawBaseScreen() {
+void header(const String& title) {
     M5.Display.fillScreen(TFT_BLACK);
-    M5.Display.fillRect(0, 0, screenWidth, 94, TFT_NAVY);
+    M5.Display.fillRect(0, 0, displayWidth, 90, TFT_NAVY);
     M5.Display.setTextColor(TFT_CYAN, TFT_NAVY);
-    M5.Display.setTextSize(4);
-    M5.Display.setCursor(kLeft, 25);
-    M5.Display.print("InfoTAB  v0.2");
-
-    M5.Display.drawFastVLine(kRight - 24, 111, screenHeight - 132, TFT_DARKGREY);
-    writeText(kLeft, 132, "TEST DOTYKU", TFT_GREEN, 3);
-    writeText(kLeft, 182, "Dotknij dowolnego miejsca", TFT_WHITE);
-    writeText(kRight, 132, "DIAGNOSTYKA WI-FI", TFT_CYAN, 3);
-    writeText(kRight, 181, "ESP32-C6 / SDIO", TFT_LIGHTGREY);
-
-    M5.Display.drawRect(kLeft, 255, 540, 290, TFT_DARKGREY);
-    writeText(kLeft + 18, 268, "Pole podgladu dotyku", TFT_LIGHTGREY);
-    M5.Display.drawRect(kRight, 244, screenWidth - kRight - 38,
-                        screenHeight - 375, TFT_DARKGREY);
-
-    scanButtonX = screenWidth - kScanButtonWidth - 42;
-    scanButtonY = screenHeight - kScanButtonHeight - 35;
-    drawScanButton();
-    writeText(kLeft, screenHeight - 73, "USB COM6 | 115200 baud", TFT_LIGHTGREY);
-    writeText(kLeft, screenHeight - 43, "Bez laczenia z siecia", TFT_YELLOW);
+    M5.Display.setTextSize(3);
+    M5.Display.setCursor(MARGIN, 22);
+    M5.Display.print("InfoTAB");
+    M5.Display.setTextColor(TFT_WHITE, TFT_NAVY);
+    M5.Display.setTextSize(2);
+    M5.Display.setCursor(MARGIN + 310, 34);
+    M5.Display.print(title);
 }
 
-void showTouch(int x, int y, bool pressed) {
-    M5.Display.fillRect(kLeft + 5, 298, 530, 235, TFT_BLACK);
-    writeText(kLeft + 18, 314, "X: " + String(x), TFT_WHITE, 3);
-    writeText(kLeft + 18, 364, "Y: " + String(y), TFT_WHITE, 3);
-    writeText(kLeft + 18, 419, pressed ? "DOTYK: AKTYWNY" : "DOTYK: ZWOLNIONY",
-              pressed ? TFT_GREEN : TFT_YELLOW);
-    if (x >= 0 && y >= 0 && screenWidth > 0 && screenHeight > 0) {
-        int px = kLeft + 18 + (x * 500 / screenWidth);
-        int py = 471 + (y * 42 / screenHeight);
-        M5.Display.fillCircle(px, py, 7, TFT_CYAN);
-    }
+bool connected() {
+    return wifiReady && WiFi.status() == WL_CONNECTED;
 }
 
-void showWifiMessage(const String& text, uint16_t color = TFT_WHITE) {
-    M5.Display.fillRect(kRight + 6, 252, screenWidth - kRight - 50,
-                        screenHeight - 390, TFT_BLACK);
-    writeText(kRight + 22, 267, text, color);
-}
-
-void scanWifi() {
-    scanActive = true;
-    drawScanButton();
-    showWifiMessage("Skanowanie sieci...", TFT_YELLOW);
-    Serial.println("[InfoTAB] Wi-Fi scan requested");
-    if (!wifiInitialized) {
-        // ESP32-P4 requires explicit SDIO pin mapping to its ESP32-C6 co-processor.
-        WiFi.setPins(kSdioClk, kSdioCmd, kSdioD0, kSdioD1,
-                     kSdioD2, kSdioD3, kSdioRst);
-        if (!WiFi.mode(WIFI_STA)) {
-            Serial.println("[InfoTAB] Wi-Fi mode initialization FAILED");
-            showWifiMessage("Blad inicjalizacji Wi-Fi", TFT_RED);
-            scanActive = false;
-            drawScanButton();
-            return;
-        }
-        wifiInitialized = true;
-    }
-
-    const int count = WiFi.scanNetworks();
-    if (count < 0) {
-        Serial.printf("[InfoTAB] Wi-Fi scan error: %d\n", count);
-        showWifiMessage("Blad skanowania Wi-Fi", TFT_RED);
-    } else if (count == 0) {
-        Serial.println("[InfoTAB] Wi-Fi scan: 0 networks");
-        showWifiMessage("Nie znaleziono sieci", TFT_YELLOW);
+void drawHome() {
+    header("Siec / ustawienia");
+    const bool online = connected();
+    writeText(45, 124, online ? "POLACZONO Z WI-FI" : "WI-FI: BRAK POLACZENIA",
+              online ? TFT_GREEN : TFT_YELLOW, 3);
+    if (online) {
+        writeText(45, 190, "SSID: " + WiFi.SSID(), TFT_WHITE, 2);
+        writeText(45, 235, "Adres IP: " + WiFi.localIP().toString(), TFT_CYAN, 3);
+        writeText(45, 292, "RSSI: " + String(WiFi.RSSI()) + " dBm", TFT_WHITE, 2);
+    } else if (savedSsid.length()) {
+        writeText(45, 190, "Zapisana siec: " + savedSsid, TFT_WHITE);
+        writeText(45, 235, "Mozesz sprobowac ponownie.", TFT_LIGHTGREY);
     } else {
-        M5.Display.fillRect(kRight + 6, 252, screenWidth - kRight - 50,
-                            screenHeight - 390, TFT_BLACK);
-        writeText(kRight + 20, 266, "Znaleziono: " + String(count), TFT_GREEN);
-        Serial.printf("[InfoTAB] Wi-Fi scan found %d network(s)\n", count);
-        const int visible = min(count, 7);
-        for (int i = 0; i < visible; ++i) {
-            String ssid = WiFi.SSID(i);
-            if (ssid.length() == 0) ssid = "<ukryta>";
-            if (ssid.length() > 20) ssid = ssid.substring(0, 20);
-            const int rssi = WiFi.RSSI(i);
-            writeText(kRight + 20, 304 + i * 40,
-                      ssid + "  " + String(rssi) + " dBm", TFT_WHITE);
-            Serial.printf("[InfoTAB] Wi-Fi #%d RSSI=%d dBm\n", i + 1, rssi);
+        writeText(45, 190, "Nie skonfigurowano sieci.", TFT_WHITE);
+        writeText(45, 235, "Wybierz siec i wpisz haslo na ekranie.", TFT_LIGHTGREY);
+    }
+    if (infoMessage.length()) {
+        writeText(45, 355, infoMessage.substring(0, 62), TFT_YELLOW);
+    }
+    button(45, 450, 330, 90, "WYBIERZ SIEC", TFT_DARKCYAN, 2);
+    if (savedSsid.length()) {
+        button(408, 450, 335, 90, "POLACZ PONOWNIE", TFT_DARKGREEN, 2);
+        button(777, 450, 335, 90, "ZAPOMNIJ SIEC", TFT_MAROON, 2);
+    }
+    writeText(45, displayHeight - 62, "Konfiguracja lokalna | bez hasel w GitHub", TFT_LIGHTGREY);
+}
+
+void drawNetworks() {
+    header("Wybierz siec Wi-Fi");
+    writeText(40, 108, "Dotknij nazwy sieci. Pokazano do 32 wynikow.", TFT_LIGHTGREY);
+    for (int i = 0; i < NETWORKS_PER_PAGE; ++i) {
+        const int index = networkPage * NETWORKS_PER_PAGE + i;
+        if (index >= networkCount) break;
+        const int y = 155 + i * 64;
+        M5.Display.fillRoundRect(38, y, displayWidth - 76, 57, 8, TFT_DARKGREY);
+        M5.Display.setTextColor(TFT_WHITE, TFT_DARKGREY);
+        M5.Display.setTextSize(2);
+        M5.Display.setCursor(56, y + 16);
+        String name = networks[index].ssid;
+        if (name.length() > 34) name = name.substring(0, 34) + "...";
+        M5.Display.print(name);
+        M5.Display.setCursor(displayWidth - 345, y + 16);
+        M5.Display.print(String(networks[index].rssi) + " dBm");
+        M5.Display.setCursor(displayWidth - 158, y + 16);
+        M5.Display.print(networks[index].secured ? "LOCK" : "OPEN");
+    }
+    button(38, 636, 200, 62, "WROC", TFT_DARKGREY);
+    button(265, 636, 246, 62, "ODSWIEZ");
+    if (networkPage > 0) button(540, 636, 185, 62, "POPRZ.");
+    if ((networkPage + 1) * NETWORKS_PER_PAGE < networkCount)
+        button(750, 636, 185, 62, "DALEJ");
+    writeText(displayWidth - 300, 653, "Znaleziono: " + String(networkCount), TFT_LIGHTGREY);
+    if (networkCount == 0) writeText(50, 260, infoMessage, TFT_YELLOW, 2);
+}
+
+const char* keyRows(bool special, int row) {
+    static const char* letters[] = {
+        "1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm"
+    };
+    static const char* symbols[] = {
+        "1234567890", "!@#$%^&*()", "-_=+[]{};:", "'\",.<>/?\\|"
+    };
+    return (special ? symbols : letters)[row];
+}
+
+char keyChar(const char* row, int index) {
+    char value = row[index];
+    if (upperCase && !symbolMode && value >= 'a' && value <= 'z')
+        value = static_cast<char>(value - ('a' - 'A'));
+    return value;
+}
+
+void drawPassword() {
+    header("Haslo sieci Wi-Fi");
+    button(displayWidth - 180, 18, 140, 56, "WROC", TFT_DARKGREY);
+    writeText(43, 110, "SIEC: " + pendingSsid.substring(0, 44), TFT_CYAN, 2);
+    writeText(43, 156, "Wpisz haslo (8-63 znaki ASCII):", TFT_WHITE);
+    M5.Display.drawRoundRect(40, 205, displayWidth - 80, 73, 8, TFT_LIGHTGREY);
+    String dots;
+    for (size_t i = 0; i < pendingPassword.length(); ++i) dots += '*';
+    writeText(60, 224, dots, TFT_GREEN, 2);
+    writeText(45, 286, infoMessage, TFT_YELLOW, 2);
+
+    const int keyWidth = (displayWidth - 2 * MARGIN - 9 * KEY_GAP) / 10;
+    for (int r = 0; r < 4; ++r) {
+        const char* keys = keyRows(symbolMode, r);
+        const int len = strlen(keys);
+        const int x0 = (displayWidth - (len * keyWidth + (len - 1) * KEY_GAP)) / 2;
+        for (int i = 0; i < len; ++i) {
+            const char c = keyChar(keys, i);
+            button(x0 + i * (keyWidth + KEY_GAP), KEY_FIRST_Y + r * 63,
+                   keyWidth, KEY_HEIGHT, String(c), TFT_DARKGREY, 2);
         }
-        if (count > visible) {
-            writeText(kRight + 20, 304 + visible * 40,
-                      "Pozostale: " + String(count - visible), TFT_LIGHTGREY);
+    }
+    const int y = 580;
+    button(32, y, 170, 67, upperCase ? "shift ON" : "SHIFT", TFT_NAVY);
+    button(216, y, 145, 67, symbolMode ? "ABC" : "SYM", TFT_NAVY);
+    button(376, y, 340, 67, "SPACJA", TFT_DARKGREY);
+    button(733, y, 180, 67, "KASUJ", TFT_MAROON);
+    button(931, y, displayWidth - 963, 67, "POLACZ", TFT_DARKGREEN);
+    writeText(43, 680, "Haslo pozostaje w pamieci urzadzenia (NVS).", TFT_LIGHTGREY);
+}
+
+void drawConnecting() {
+    header("Laczenie z Wi-Fi");
+    writeText(55, 160, "Proba polaczenia...", TFT_CYAN, 3);
+    writeText(55, 245, "SIEC: " + pendingSsid.substring(0, 44), TFT_WHITE);
+    writeText(55, 300, "Maksymalnie 20 sekund", TFT_LIGHTGREY);
+    writeText(55, 365, "Nie odlaczaj zasilania.", TFT_YELLOW);
+    button(55, 485, 285, 70, "ANULUJ", TFT_MAROON);
+}
+
+void render() {
+    switch (page) {
+        case Page::Home: drawHome(); break;
+        case Page::Networks: drawNetworks(); break;
+        case Page::Password: drawPassword(); break;
+        case Page::Connecting: drawConnecting(); break;
+    }
+}
+
+bool initWifi() {
+    if (wifiReady) return true;
+    WiFi.setPins(SDIO_CLK, SDIO_CMD, SDIO_D0, SDIO_D1,
+                 SDIO_D2, SDIO_D3, SDIO_RST);
+    if (!WiFi.mode(WIFI_STA)) {
+        logEvent("ERROR: Wi-Fi SDIO init failed");
+        return false;
+    }
+    wifiReady = true;
+    return true;
+}
+
+void readSaved() {
+    Preferences prefs;
+    if (!prefs.begin("infotab_wifi", true)) return;
+    savedSsid = prefs.getString("ssid", "");
+    savedPassword = prefs.getString("password", "");
+    prefs.end();
+}
+
+bool saveCredentials() {
+    Preferences prefs;
+    if (!prefs.begin("infotab_wifi", false)) return false;
+    // Save only after a successful connection. No serial logging of secrets.
+    const size_t n = prefs.putString("ssid", pendingSsid);
+    prefs.putString("password", pendingPassword);
+    prefs.end();
+    return n > 0;
+}
+
+void forgetSaved() {
+    if (wifiReady) WiFi.disconnect();
+    Preferences prefs;
+    if (prefs.begin("infotab_wifi", false)) {
+        prefs.remove("ssid");
+        prefs.remove("password");
+        prefs.end();
+    }
+    savedSsid = "";
+    savedPassword = "";
+    pendingSsid = "";
+    pendingPassword = "";
+    infoMessage = "Usunieto zapisana siec.";
+    page = Page::Home;
+    render();
+    logEvent("Saved Wi-Fi settings cleared");
+}
+
+void startConnection(bool shouldSave) {
+    if (!initWifi()) {
+        infoMessage = "Blad inicjalizacji Wi-Fi";
+        page = Page::Home;
+        render();
+        return;
+    }
+    WiFi.disconnect();
+    saveAfterSuccess = shouldSave;
+    connectionStart = millis();
+    page = Page::Connecting;
+    render();
+    if (pendingPassword.isEmpty())
+        WiFi.begin(pendingSsid.c_str());
+    else
+        WiFi.begin(pendingSsid.c_str(), pendingPassword.c_str());
+    logEvent("Wi-Fi connection started (credentials hidden)");
+}
+
+void scanNetworks() {
+    page = Page::Networks;
+    infoMessage = "Skanowanie...";
+    networkCount = 0;
+    networkPage = 0;
+    render();
+
+    if (!initWifi()) {
+        infoMessage = "Nie mozna uruchomic ESP32-C6.";
+        render();
+        return;
+    }
+    const int total = WiFi.scanNetworks();
+    if (total < 0) {
+        infoMessage = "Nie udalo sie przeskanowac sieci.";
+    } else {
+        for (int i = 0; i < total && networkCount < MAX_NETWORKS; ++i) {
+            const String ssid = WiFi.SSID(i);
+            if (ssid.isEmpty()) continue; // Hidden SSIDs not configured in v0.3.
+            networks[networkCount].ssid = ssid;
+            networks[networkCount].rssi = WiFi.RSSI(i);
+            networks[networkCount].secured = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
+            ++networkCount;
         }
+        infoMessage = networkCount ? "" : "Nie znaleziono widocznych sieci.";
     }
     WiFi.scanDelete();
-    scanActive = false;
-    drawScanButton();
+    render();
+    Serial.printf("[InfoTAB] Scan completed; visible networks=%d\n", networkCount);
 }
 
-bool withinScanButton(int x, int y) {
-    return x >= scanButtonX && x < (scanButtonX + kScanButtonWidth) &&
-           y >= scanButtonY && y < (scanButtonY + kScanButtonHeight);
+void selectNetwork(int index) {
+    pendingSsid = networks[index].ssid;
+    passwordSecure = networks[index].secured;
+    pendingPassword = "";
+    upperCase = false;
+    symbolMode = false;
+    infoMessage = "";
+    if (!passwordSecure) {
+        startConnection(true);
+    } else {
+        page = Page::Password;
+        render();
+    }
 }
-}  // namespace
+
+void handleHome(int x, int y) {
+    if (inside(x, y, 45, 450, 330, 90)) {
+        scanNetworks();
+    } else if (savedSsid.length() && inside(x, y, 408, 450, 335, 90)) {
+        pendingSsid = savedSsid;
+        pendingPassword = savedPassword;
+        startConnection(false);
+    } else if (savedSsid.length() && inside(x, y, 777, 450, 335, 90)) {
+        forgetSaved();
+    }
+}
+
+void handleNetworks(int x, int y) {
+    for (int i = 0; i < NETWORKS_PER_PAGE; ++i) {
+        const int index = networkPage * NETWORKS_PER_PAGE + i;
+        if (index < networkCount && inside(x, y, 38, 155 + i * 64,
+                                            displayWidth - 76, 57)) {
+            selectNetwork(index);
+            return;
+        }
+    }
+    if (inside(x, y, 38, 636, 200, 62)) {
+        page = Page::Home;
+        render();
+    } else if (inside(x, y, 265, 636, 246, 62)) {
+        scanNetworks();
+    } else if (networkPage > 0 && inside(x, y, 540, 636, 185, 62)) {
+        --networkPage;
+        render();
+    } else if ((networkPage + 1) * NETWORKS_PER_PAGE < networkCount &&
+               inside(x, y, 750, 636, 185, 62)) {
+        ++networkPage;
+        render();
+    }
+}
+
+void handlePassword(int x, int y) {
+    if (inside(x, y, displayWidth - 180, 18, 140, 56)) {
+        pendingPassword = "";
+        page = Page::Networks;
+        render();
+        return;
+    }
+    const int keyWidth = (displayWidth - 2 * MARGIN - 9 * KEY_GAP) / 10;
+    for (int r = 0; r < 4; ++r) {
+        const char* row = keyRows(symbolMode, r);
+        const int len = strlen(row);
+        const int x0 = (displayWidth - (len * keyWidth + (len - 1) * KEY_GAP)) / 2;
+        for (int i = 0; i < len; ++i) {
+            if (inside(x, y, x0 + i * (keyWidth + KEY_GAP),
+                       KEY_FIRST_Y + r * 63, keyWidth, KEY_HEIGHT)) {
+                if (pendingPassword.length() < 63)
+                    pendingPassword += keyChar(row, i);
+                infoMessage = "";
+                render();
+                return;
+            }
+        }
+    }
+    if (inside(x, y, 32, 580, 170, 67)) {
+        upperCase = !upperCase;
+    } else if (inside(x, y, 216, 580, 145, 67)) {
+        symbolMode = !symbolMode;
+    } else if (inside(x, y, 376, 580, 340, 67)) {
+        if (pendingPassword.length() < 63) pendingPassword += ' ';
+    } else if (inside(x, y, 733, 580, 180, 67)) {
+        if (pendingPassword.length()) pendingPassword.remove(pendingPassword.length() - 1);
+    } else if (inside(x, y, 931, 580, displayWidth - 963, 67)) {
+        if (pendingPassword.length() < 8) {
+            infoMessage = "Haslo musi miec co najmniej 8 znakow.";
+        } else {
+            startConnection(true);
+            return;
+        }
+    } else {
+        return;
+    }
+    render();
+}
+
+void handleConnecting(int x, int y) {
+    if (inside(x, y, 55, 485, 285, 70)) {
+        WiFi.disconnect();
+        pendingPassword = "";
+        infoMessage = "Polaczenie anulowane.";
+        page = Page::Home;
+        render();
+    }
+}
+
+void updateConnection() {
+    if (page != Page::Connecting) return;
+    if (connected()) {
+        bool stored = true;
+        if (saveAfterSuccess) {
+            stored = saveCredentials();
+            savedSsid = pendingSsid;
+            savedPassword = pendingPassword;
+        }
+        pendingPassword = "";
+        infoMessage = stored ? "Polaczenie udane." :
+                              "Polaczono, ale zapis ustawien nie powiodl sie.";
+        page = Page::Home;
+        render();
+        logEvent("Wi-Fi connected; IP available on screen");
+    } else if (millis() - connectionStart > CONNECT_TIMEOUT_MS) {
+        WiFi.disconnect();
+        pendingPassword = "";
+        infoMessage = "Blad polaczenia / timeout. Sprobuj ponownie.";
+        page = Page::Home;
+        render();
+        logEvent("Wi-Fi connection timeout");
+    }
+}
+} // namespace
 
 void setup() {
     Serial.begin(115200);
     auto cfg = M5.config();
     M5.begin(cfg);
     M5.Display.setRotation(1);
-    // Tab5 panel revisions can differ in their default orientation.
-    // Keep the diagnostics UI in landscape (wider than tall).
-    if (M5.Display.width() < M5.Display.height()) {
+    if (M5.Display.width() < M5.Display.height())
         M5.Display.setRotation(0);
+    displayWidth = M5.Display.width();
+    displayHeight = M5.Display.height();
+    logEvent("v0.3 boot: touchscreen Wi-Fi configuration");
+    readSaved();
+    infoMessage = "Wybierz siec na ekranie.";
+    render();
+    if (savedSsid.length()) {
+        pendingSsid = savedSsid;
+        pendingPassword = savedPassword;
+        startConnection(false);
     }
-    screenWidth = M5.Display.width();
-    screenHeight = M5.Display.height();
-    drawBaseScreen();
-
-    Serial.println("\n[InfoTAB] v0.2 touchscreen + Wi-Fi diagnostics");
-    Serial.printf("[InfoTAB] LCD: %d x %d\n", screenWidth, screenHeight);
-    Serial.printf("[InfoTAB] Touch enabled: %s\n",
-                  M5.Touch.isEnabled() ? "YES" : "NO");
-    Serial.println("[InfoTAB] Tap SCAN Wi-Fi to initialize ESP32-C6 SDIO.");
 }
 
 void loop() {
     M5.update();
     const auto touch = M5.Touch.getDetail();
-    const uint32_t now = millis();
-
-    if (touch.isPressed()) {
-        if (touch.x != lastTouchX || touch.y != lastTouchY ||
-            now - lastTouchRefresh >= kTouchRefreshMs) {
-            showTouch(touch.x, touch.y, true);
-            lastTouchRefresh = now;
-            lastTouchX = touch.x;
-            lastTouchY = touch.y;
-        }
-        if (touch.wasPressed()) {
-            Serial.printf("[InfoTAB] Touch DOWN x=%d y=%d\n", touch.x, touch.y);
-        }
-    }
     if (touch.wasClicked()) {
-        Serial.printf("[InfoTAB] Touch CLICK x=%d y=%d\n", touch.x, touch.y);
-        showTouch(touch.x, touch.y, false);
-        if (!scanActive && withinScanButton(touch.x, touch.y)) {
-            scanWifi();  // diagnostic only, no credentials required
+        const int x = touch.x;
+        const int y = touch.y;
+        switch (page) {
+            case Page::Home: handleHome(x, y); break;
+            case Page::Networks: handleNetworks(x, y); break;
+            case Page::Password: handlePassword(x, y); break;
+            case Page::Connecting: handleConnecting(x, y); break;
         }
     }
-
-    if (now - lastUptimeLog >= kLogUptimeMs) {
-        lastUptimeLog = now;
-        Serial.printf("[InfoTAB] uptime=%lu s\n",
-                      static_cast<unsigned long>(now / 1000));
+    updateConnection();
+    if (page == Page::Home && millis() - lastHomeRefresh >= HOME_REFRESH_MS) {
+        lastHomeRefresh = millis();
+        render();
     }
     delay(8);
 }
