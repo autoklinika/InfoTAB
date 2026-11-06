@@ -49,7 +49,7 @@ try {
             throw 'Invalid OTA token length/format. No upload attempted.'
         }
         Write-Host "[InfoTAB] UDP OTA invitation: $DeviceIp:3232"
-        Write-Host "[InfoTAB] TCP callback listener: $hostIp:3233 (Windows inbound rule configured)"
+        Write-Host "[InfoTAB] TCP callback listener: ${hostIp}:3233 (Windows inbound rule configured)"
         Write-Host "[InfoTAB] Sending $size bytes (firmware)..."
         # Password is passed only to the local espota process; Windows process
         # command-line inspection may still expose it briefly. LAN dev use only.
