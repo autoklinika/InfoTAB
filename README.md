@@ -68,6 +68,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 Po BUILD SUCCESS wgrywaj przez dotychczasowy port COM6. Do zatwierdzenia
 testu sprzętowego zachowujemy możliwość powrotu do działającej v0.3.
 
+## Nowy wariant 16 MB — wyłącznie kompilacja testowa
+
+Audyt potwierdził, że obie istniejące partycje OTA na Tab5 i w
+domyślnym Build mają po 1280 KiB. Poniższe polecenie sprawdza nowy,
+**osobny wariant 16 MB** (sloty po 6,25 MiB); nie wgrywa firmware:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-16mb-audit-windows.ps1
+```
+
+Oczekiwany rezultat:
+`16MB BUILD + AUDIT PASS. USB UPLOAD WAS NOT EXECUTED.`
+
+**Nie uruchamiaj `-t upload` dla `infotab_tab5_16mb_audit`!**
+Najpierw musimy wykonać bezpieczną lokalną kopię NVS,
+sprawdzić konfigurację bootloadera i opracować migrację z planem odzyskania.
+
 ## Weryfikacja partycji przed OTA
 
 **STOP: nie wdrażaj jeszcze firmware OTA i nie zmieniaj `board_build.partitions`.**
