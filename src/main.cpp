@@ -5,10 +5,13 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <NetworkClient.h>
+#include <ArduinoOTA.h>
+#include <esp_system.h>
+#include "InfoTABModbus.h"
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 
-// InfoTAB v0.5: working UPS dashboard (NUT read-only) + AI Platform status,
+// InfoTAB v0.6: direct Modbus TCP UPS + Wi-Fi OTA + differential LCD refresh,
 // with existing touchscreen Wi-Fi setup and read-only OTA diagnostics.
 // Credentials are NEVER embedded in source, printed on Serial, or sent to GitHub.
 // The ESP32-P4 uses the ESP32-C6 Wi-Fi companion via M5Stack's SDIO pin mapping.
@@ -30,13 +33,11 @@ constexpr int KEY_HEIGHT = 51;
 constexpr int KEY_FIRST_Y = 313;
 constexpr uint32_t CONNECT_TIMEOUT_MS = 20000;
 constexpr uint32_t HOME_REFRESH_MS = 5000;
-constexpr const char* UPS_HOST = "192.168.1.101";
-constexpr uint16_t UPS_PORT = 3493;
-constexpr const char* UPS_NAME = "qnapups";
+// Direct PowerWalker Modbus TCP is implemented in InfoTABModbus.h.
 constexpr uint32_t DASH_REFRESH_MS = 8000;
 constexpr const char* BRIDGE_HEALTH = "http://192.168.1.100:8080/health";
 
-enum class Page { Dashboard, Home, Networks, Password, Connecting, OtaDiag };
+enum class Page { Dashboard, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
 struct NetworkEntry {
     String ssid;
     int rssi = -100;
@@ -67,15 +68,22 @@ bool aiBridgeChecked = false;
 
 struct UpsData {
     bool valid = false;
-    bool onBattery = false;
-    bool lowBattery = false;
-    bool charging = false;
+    int modeCode = -1;
     int batteryPct = -1;
     int loadPct = -1;
+    int inputVoltTenths = -1;
+    int outputVoltTenths = -1;
+    int outputHzTenths = -1;
     long runtimeSeconds = -1;
     uint32_t updatedAt = 0;
 };
 UpsData ups;
+bool otaArmed = false;
+bool otaInProgress = false;
+uint32_t otaArmedAt = 0;
+constexpr uint32_t OTA_WINDOW_MS = 300000;
+String otaPassword;
+String otaStatus = "Gotowe do aktywacji aktualizacji.";
 
 void logEvent(const char* event) {
     // Deliberately never log SSIDs or passwords.
@@ -124,72 +132,28 @@ bool connected() {
 // Forward declaration: dashboard navigation uses render() below.
 void render();
 
-bool readNutVar(NetworkClient& client, const char* variable, String& result) {
-    const String prefix = String("VAR ") + UPS_NAME + " " + variable + " ";
-    client.print(String("GET VAR ") + UPS_NAME + " " + variable + "\n");
-    String line = client.readStringUntil('\n');
-    line.trim();
-    if (!line.startsWith(prefix)) return false;
-    String quoted = line.substring(prefix.length());
-    if (quoted.length() < 2 || quoted[0] != '"' ||
-        quoted[quoted.length() - 1] != '"') return false;
-    result = quoted.substring(1, quoted.length() - 1);
-    return true;
-}
-
-bool positiveNumber(const String& s, long& out) {
-    if (!s.length() || s.length() > 10) return false;
-    for (size_t i = 0; i < s.length(); ++i)
-        if (s[i] < '0' || s[i] > '9') return false;
-    out = s.toInt();
-    return out >= 0;
-}
-
 void pollUpsReadOnly() {
-    UpsData sample;
-    if (!connected()) { ups = sample; return; }
-    NetworkClient client;
-    client.setTimeout(800);
-    if (!client.connect(UPS_HOST, UPS_PORT, 1200)) {
-        ups = sample;
-        logEvent("UPS NUT unavailable");
+    UpsData snapshot;
+    if (!connected()) { ups = snapshot; return; }
+    infotab_modbus::Sample m;
+    if (!infotab_modbus::poll(m)) {
+        ups = snapshot;
+        logEvent("MODBUS TCP UPS: no valid data");
         return;
     }
-    String status, battery, load, runtime;
-    const bool ok =
-        readNutVar(client, "ups.status", status) &&
-        readNutVar(client, "battery.charge", battery) &&
-        readNutVar(client, "ups.load", load) &&
-        readNutVar(client, "battery.runtime", runtime);
-    client.stop();
-    long batValue = -1, loadValue = -1, runtimeValue = -1;
-    if (!ok || !positiveNumber(battery, batValue) ||
-        !positiveNumber(load, loadValue) ||
-        !positiveNumber(runtime, runtimeValue) ||
-        batValue > 100 || loadValue > 100) {
-        ups = sample;
-        logEvent("UPS NUT invalid or incomplete telemetry");
-        return;
-    }
-    const String flags = " " + status + " ";
-    sample.onBattery = flags.indexOf(" OB ") >= 0;
-    const bool onLine = flags.indexOf(" OL ") >= 0;
-    if (sample.onBattery == onLine) {
-        ups = sample;
-        logEvent("UPS NUT contradictory or absent OL/OB");
-        return;
-    }
-    sample.lowBattery = flags.indexOf(" LB ") >= 0;
-    sample.charging = flags.indexOf(" CHRG ") >= 0;
-    sample.batteryPct = static_cast<int>(batValue);
-    sample.loadPct = static_cast<int>(loadValue);
-    sample.runtimeSeconds = runtimeValue;
-    sample.updatedAt = millis();
-    sample.valid = true;
-    ups = sample;
-    Serial.printf("[InfoTAB] UPS_NUT status=%s battery=%d%% load=%d%% runtime=%ldsec\n",
-                  sample.onBattery ? "BATTERY" : "MAINS", sample.batteryPct,
-                  sample.loadPct, sample.runtimeSeconds);
+    snapshot.valid = true;
+    snapshot.modeCode = m.modeCode;
+    snapshot.batteryPct = m.batteryPercent;
+    snapshot.loadPct = m.loadPercent;
+    snapshot.inputVoltTenths = m.inputVolts10;
+    snapshot.outputVoltTenths = m.outputVolts10;
+    snapshot.outputHzTenths = m.outputHertz10;
+    snapshot.runtimeSeconds = m.runtimeSeconds;
+    snapshot.updatedAt = millis();
+    ups = snapshot;
+    Serial.printf("[InfoTAB] Modbus UPS mode=%d battery=%d%% load=%d%% voltage=%d/10V runtime=%lds\n",
+                  ups.modeCode, ups.batteryPct, ups.loadPct,
+                  ups.outputVoltTenths, ups.runtimeSeconds);
 }
 
 void pollAiBridge() {
