@@ -17,6 +17,8 @@ struct Sample {
     uint16_t apparentPowerRegister = 0; // FC03 reg159; diagnostic only.
     bool powerRegisterValid = false;
     uint8_t batteryPercent = 0;
+    int32_t outputActiveWattsEstimate = -1; // reg156 0.1kW hypothesis, requires calibration
+    int32_t outputApparentVaEstimate = -1; // reg159 0.1kVA hypothesis
     uint16_t inputVolts10 = 0;   // /10 -> V
     uint16_t outputVolts10 = 0;  // /10 -> V
     uint16_t outputHertz10 = 0;  // /10 -> Hz
@@ -94,6 +96,13 @@ inline bool poll(Sample &result) {
     result.outputVolts10 = output[3];
     result.outputHertz10 = output[0];
     result.loadPercent = static_cast<uint8_t>(output[18]);
+    // On this UPS: reg156=2 and reg159=3 at ~10% of 3kVA load.
+    // Tentative 0.1 kW/kVA scale -> ~200W/~300VA. NOT calibrated.
+    // Sentinel 0xFFFF means unsupported. Do not invent measured watts.
+    if (output[12] != 0xFFFF && output[12] <= 100)
+        result.outputActiveWattsEstimate = static_cast<int32_t>(output[12]) * 100;
+    if (output[15] != 0xFFFF && output[15] <= 100)
+        result.outputApparentVaEstimate = static_cast<int32_t>(output[15]) * 100;
     if (output[12] != 0xFFFF && output[15] != 0xFFFF &&
         output[12] <= output[15] && output[15] < 5000) {
         result.activePowerRegister = output[12];  // holding register 156
