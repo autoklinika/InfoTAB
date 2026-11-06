@@ -350,46 +350,44 @@ void drawOverview() {
     drawOverviewValues();
 }
 // Eight aligned tiles; each live measurement has its own light graphite card.
+// UPS: the entire module is eight tiles. No topbar or outside diagnostics.
 void powerTile(int col, int row, const String& label, const String& note) {
-    const int x = 32 + col * 308, y = 111 + row * 251;
-    panel(x, y, 292, 233);
-    uiText(x + 22, y + 21, label, UI_MUTED, 2);
-    M5.Display.drawFastHLine(x + 22, y + 176, 247, UI_BORDER);
-    uiText(x + 22, y + 187, note, UI_MUTED, 1);
+    const int x = 32 + col * 308, y = 24 + row * 287;
+    panel(x, y, 292, 264);
+    uiText(x + 21, y + 30, label, UI_MUTED, 2);
+    rule(x + 21, y + 213, 249);
+    uiText(x + 21, y + 227, note, UI_MUTED, 1);
 }
 void tilePowerValue(int col, int row, const String& value,
                     uint16_t color = UI_WHITE, int scale = 3) {
-    const int x = 54 + col * 308, y = 201 + row * 251;
-    valueAt(x, y, 247, 75, value, color, scale);
+    const int x = 53 + col * 308, y = 140 + row * 287;
+    valueAt(x, y, 249, 70, value, color, scale);
 }
 void drawPowerValues() {
     tilePowerValue(0, 0, ups.valid ? String(ups.inputVoltTenths / 10.0f, 1) + " V" : "--");
     tilePowerValue(1, 0, ups.valid ? String(ups.outputVoltTenths / 10.0f, 1) + " V" : "--");
     tilePowerValue(2, 0, ups.valid ? String(ups.outputHzTenths / 10.0f, 1) + " Hz" : "--");
     tilePowerValue(3, 0, ups.valid && ups.powerWattsEstimate >= 0 ?
-                   String("~") + String(ups.powerWattsEstimate) + " W" : "--",
-                   UI_WHITE, 3);
+                   String("~") + String(ups.powerWattsEstimate) + " W" : "--");
     tilePowerValue(0, 1, ups.valid ? String(ups.batteryPct) + "%" : "--",
                    ups.valid ? UI_GOOD : UI_WARNING, 4);
     tilePowerValue(1, 1, ups.valid ? String(ups.loadPct) + "%" : "--", UI_WHITE, 4);
-    tilePowerValue(2, 1, ups.valid ? String(ups.runtimeSeconds / 60) + " min" : "--",
-                   UI_WHITE, 3);
+    tilePowerValue(2, 1, ups.valid ? String(ups.runtimeSeconds / 60) + " min" : "--");
     tilePowerValue(3, 1, ups.valid && ups.batteryVoltTenths > 0 ?
                    String(ups.batteryVoltTenths / 10.0f, 1) + " V" : "--");
 }
 void drawPower() {
-    tabShell("PARAMETRY UPS", 1);
-    powerTile(0, 0, "WEJSCIE", "Nap. wejsciowe");
-    powerTile(1, 0, "WYJSCIE", "Nap. wyjsciowe");
-    powerTile(2, 0, "CZESTOTLIWOSC", "Czestotliwosc wyj.");
-    powerTile(3, 0, "MOC WYJ. *", "Orientacyjna, reg156");
-    powerTile(0, 1, "BATERIA", "Stopien naladowania");
-    powerTile(1, 1, "OBCIAZENIE", "Wzgledem mocy znam.");
-    powerTile(2, 1, "CZAS UPS", "Szacowany czas");
-    powerTile(3, 1, "NAPIECIE BATERII", "Napiecie akum.");
+    tabShell("", 2);
+    powerTile(0, 0, "WEJSCIE", "Napiecie sieci");
+    powerTile(1, 0, "WYJSCIE", "Napiecie UPS");
+    powerTile(2, 0, "CZESTOTLIWOSC", "Wyjscie UPS");
+    powerTile(3, 0, "MOC WYJ. *", "Szacunek / reg156");
+    powerTile(0, 1, "BATERIA", "Naladowanie");
+    powerTile(1, 1, "OBCIAZENIE", "Procent nominalny");
+    powerTile(2, 1, "CZAS UPS", "Szacunek urzadzenia");
+    powerTile(3, 1, "NAP. BATERII", "Akumulator");
     drawPowerValues();
 }
-
 void drawNetworkValues() {
     valueAt(63, 209, 519, 61, connectionStatus(),
             connected() ? UI_GOOD : UI_WARNING, 3);
