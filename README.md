@@ -1,27 +1,37 @@
-## Poprawka 2026-11-06: PowerShell ParserError w OTA
+# InfoTAB
 
-Wcześniejszy `scripts/upload-wifi-windows.ps1` był uszkodzony:
-niedomknięty warunek (okolice linii 38) i zdublowany fragment po `finally`.
-Plik został zastąpiony jedną kompletną wersją. Ponadto GitHub Actions
-uruchamia teraz test składni `scripts/check-powershell-syntax.ps1`.
+## v0.8 — jaśniejsze HMI / kafelki UPS / OTA bez hasła
 
-Po pobraniu z GitHub, **przed aktualizacją urządzenia**:
+Przygotowany kod: 8 kafelków na stronie UPS, jaśniejsza paleta,
+pobór mocy wyjściowej oznaczony jako **szacunek, do potwierdzenia skali**
+oraz odbiornik OTA aktywowany dotykiem na **2 minuty bez hasła**.
+W tej fazie to rozwiązanie **wyłącznie dla zaufanej sieci LAN**,
+bez gwarancji ochrony przed innymi klientami w tej samej sieci.
+
+**Pierwsze przejście z v0.7 do v0.8:** użyj ostatni raz znanego
+uploadera z hasłem `scripts/upload-wifi-windows.ps1`, ponieważ
+obecne firmware nadal wymaga hasła.
 
 ```powershell
 git pull --ff-only
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-powershell-syntax.ps1
-```
-
-Dopiero po `POWERSHELL SYNTAX PASS (all scripts)`:
-
-```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1
 ```
 
-Jeśli brakuje reguły TCP 3233, najpierw wykonać
-`scripts/setup-ota-firewall-windows.ps1` (UAC). Nie wyłączać zapory.
+Po uruchomieniu InfoTAB v0.8 kolejne OTA bez hasła:
 
-# InfoTAB
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-no-password-windows.ps1
+```
+
+Kompilacja i odbiór sprzętowy nowej wersji: **PENDING**.
+[Dokumentacja v0.8](docs/INFOTAB_V08.md).
+Poprzedni stan źródeł: `stable/v0.6-hardware-pass` i
+dotychczasowe zatwierdzone wydanie na urządzeniu.
+
+---
+
 
 ## InfoTAB v0.7 — HMI z gestami
 
