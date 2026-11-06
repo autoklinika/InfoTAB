@@ -64,3 +64,35 @@ Po pobraniu zmian ponownie wybierz Build i Upload.
 - Nie łącz zmian do `main` bez świadomej zgody właściciela.
 
 Dokumentacja producenta: https://docs.m5stack.com/en/core/Tab5
+
+## Znany błąd esptool / Click (naprawa 2026-11-06)
+
+Jeżeli kompilacja zatrzymuje się na `bootloader.bin` i zgłasza
+`TypeError: ParamType.get_metavar() missing 1 required positional argument: 'ctx'`,
+to nie błąd kodu InfoTAB ani portu COM6. W `platformio.ini` jest już
+przypięta poprawiona wersja `tool-esptoolpy@5.0.2`, która usuwa
+niezgodność z Click 8.2+.
+
+Po pobraniu poprawki na gałęzi roboczej:
+
+```powershell
+git pull --ff-only
+```
+
+uruchom ponownie PlatformIO > Build. W logu sekcja `PACKAGES`
+powinna pokazywać `tool-esptoolpy @ 5.0.2`.
+
+Jeśli środowisko nadal raportuje `5.0.0`, sprawdź, czy jest otwarty
+właściwy folder projektu i aktywna gałąź robocza. Alternatywną
+naprawą środowiska Windows jest przypięcie zgodnej wersji Click w
+prywatnym Pythonie PlatformIO (nie w systemowym Pythonie):
+
+```powershell
+& "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" -m pip install "click==8.1.8"
+```
+
+Opcja alternatywna wpływa na lokalne środowisko PlatformIO, dlatego
+preferowane jest rozwiązanie przez `platformio.ini`.
+
+Źródła: https://github.com/espressif/esptool/issues/1089
+oraz https://github.com/espressif/esptool/releases/tag/v5.0.2
