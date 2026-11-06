@@ -28,6 +28,18 @@
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
+## Etap 3B: InfoTAB v0.7 — wieloekranowy HMI
+
+- [x] Dodano 4 ekrany główne: START / UPS / SIEC-AI / SERWIS.
+- [x] Dodano gest poziomy oraz dolne zakładki, oddzielono tap i swipe.
+- [x] Spójna typografia, grafitowa paleta, stonowany kolor akcentowy.
+- [x] Odświeżanie tylko obszarów wartości — bez cyklicznego `fillScreen()`.
+- [x] Zostawiono sprawdzony Modbus TCP i OTA przez Wi-Fi.
+- [x] Zabezpieczono kod v0.6 w `stable/v0.6-hardware-pass`.
+- [ ] Build na Windows 11 i transfer OTA v0.7: PENDING.
+- [ ] Potwierdzenie wyglądu na rzeczywistym ekranie: PENDING.
+- [ ] Test swipe, zakładek, dotyku, aktualizacji danych: PENDING.
+
 ## Etap 3A: v0.6 — docelowy transport i GUI
 
 - [x] Odczyt rzeczywistego PowerWalker przez Modbus TCP `192.168.1.102:502` z Minisforum (FC03, rejestry 112/128/144/165).
