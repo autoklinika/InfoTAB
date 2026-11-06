@@ -65,34 +65,26 @@ Po pobraniu zmian ponownie wybierz Build i Upload.
 
 Dokumentacja producenta: https://docs.m5stack.com/en/core/Tab5
 
-## Znany błąd esptool / Click (naprawa 2026-11-06)
+## Błąd esptool 5.0.0 / Click na Windows 11
 
-Jeżeli kompilacja zatrzymuje się na `bootloader.bin` i zgłasza
+Jeżeli na `bootloader.bin` pojawi się:
 `TypeError: ParamType.get_metavar() missing 1 required positional argument: 'ctx'`,
-to nie błąd kodu InfoTAB ani portu COM6. W `platformio.ini` jest już
-przypięta poprawiona wersja `tool-esptoolpy@5.0.2`, która usuwa
-niezgodność z Click 8.2+.
+to błąd zgodności `esptool 5.0.0` i `click >= 8.2`, a nie firmware.
 
-Po pobraniu poprawki na gałęzi roboczej:
+**Zalecana naprawa:** po `git pull --ff-only` uruchom w PowerShell:
 
 ```powershell
-git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
 ```
 
-uruchom ponownie PlatformIO > Build. W logu sekcja `PACKAGES`
-powinna pokazywać `tool-esptoolpy @ 5.0.2`.
+Skrypt instaluje `click==8.1.8` wyłącznie w prywatnym Pythonie
+PlatformIO (`%USERPROFILE%\.platformio\penv`), a następnie uruchamia Build.
+Nie zmienia globalnego Pythona w Windows i nie wgrywa firmware do urządzenia.
 
-Jeśli środowisko nadal raportuje `5.0.0`, sprawdź, czy jest otwarty
-właściwy folder projektu i aktywna gałąź robocza. Alternatywną
-naprawą środowiska Windows jest przypięcie zgodnej wersji Click w
-prywatnym Pythonie PlatformIO (nie w systemowym Pythonie):
+Nie używamy override `tool-esptoolpy@5.0.2` z ZIP — w połączeniu z
+`platform-espressif32#54.03.21` powodował brak pliku `esptool.py`.
+Zostawiamy pakiet esptool wskazany przez platformę.
 
-```powershell
-& "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" -m pip install "click==8.1.8"
-```
+Po Build sprawdź `SUCCESS`; dopiero wtedy wykonamy Upload na COM6.
 
-Opcja alternatywna wpływa na lokalne środowisko PlatformIO, dlatego
-preferowane jest rozwiązanie przez `platformio.ini`.
-
-Źródła: https://github.com/espressif/esptool/issues/1089
-oraz https://github.com/espressif/esptool/releases/tag/v5.0.2
+Więcej: https://github.com/espressif/esptool/issues/1105
