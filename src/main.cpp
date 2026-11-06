@@ -229,7 +229,7 @@ void tabShell(const char* title, int active) {
     M5.Display.fillScreen(UI_BG);
     uiText(34, 27, "InfoTAB", UI_WHITE, 3, UI_BG);
     uiText(305, 34, title, UI_MUTED, 2, UI_BG);
-    uiText(1064, 36, "v0.7  /  LAN", UI_MUTED, 2, UI_BG);
+    uiText(1064, 36, "v0.8  /  LAN", UI_MUTED, 2, UI_BG);
     M5.Display.drawFastHLine(32, 85, displayWidth - 64, UI_BORDER);
     M5.Display.drawFastHLine(32, 622, displayWidth - 64, UI_BORDER);
 
@@ -376,7 +376,7 @@ void drawNetwork() {
     drawNetworkValues();
 }
 void drawServiceValues() {
-    valueAt(63, 205, 520, 58, "InfoTAB v0.7", UI_WHITE, 3);
+    valueAt(63, 205, 520, 58, "InfoTAB v0.8", UI_WHITE, 3);
     valueAt(670, 205, 520, 58, otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
             otaArmed ? UI_GOOD : UI_MUTED, 3);
     valueAt(63, 340, 520, 38,
