@@ -87,8 +87,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-window
 Skrypt zapyta lokalnie o hasło z ekranu; nie podawaj go w rozmowie.
 Szczegóły i lista testów: [docs/INFOTAB_V06.md](docs/INFOTAB_V06.md).
 
-**Status:** kod v0.6 zapisany; kompilacja Windows, odczyt Modbus z Tab5
-i pierwszy transfer OTA wymagają potwierdzenia testami sprzętowymi.
+**Status:** InfoTAB v0.6 — potwierdzone na urządzeniu: boot po OTA, automatyczne Wi-Fi, Modbus UPS i brak migania (4/4 PASS, 2026-11-06). Kompilacja firmware i transfer OTA również przeszły. Kolejny priorytet: poprawa wyglądu i ergonomii GUI. Produkcyjne podpisy/rollback OTA nadal do wykonania.
 
 ## Status
 
