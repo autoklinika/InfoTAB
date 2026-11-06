@@ -38,7 +38,7 @@
 - [x] Dodano ręczny 5-minutowy odbiornik OTA z losowym hasłem na ekranie oraz uploader Windows.
 - [ ] Windows Build v0.6 i kontrola, czy binarka mieści się w 1280 KiB.
 - [ ] Uruchomienie Tab5 v0.6 przez USB-C, odczyt Modbus i brak migania: PASS.
-- [ ] Aktualizacja v0.6 → następne wydanie przez Wi-Fi: PASS.
+- [ ] Aktualizacja przez Wi-Fi: początkowy test FAILED na etapie TCP callback (`No response from device`), poprawiono Windows uploader (stały 3233, routing IP) i przygotowano ograniczoną regułę zapory; RETEST PENDING.
 - [ ] Produkcyjne uwierzytelnianie/podpisy i rollback: późniejszy etap.
 
 ## Etap 3: telemetria UPS — główny priorytet
