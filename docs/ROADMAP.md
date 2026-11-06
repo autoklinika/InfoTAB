@@ -47,6 +47,7 @@
 - [x] Read-only audyt prywatnej kopii i eFuse/ROM: PASS techniczny (2026-11-06), wykryto NON-ERASED w starych app1/spiffs/coredump
 - [x] Secure Boot: Disabled, Flash Encryption: Disabled, SPI_BOOT_CRYPT_CNT=0, flags=0 — potwierdzone na ESP32-P4 (2026-11-06)
 - [ ] Ustalić, czy dane w starym SPIFFS są użytkowe; nie zakładać, że NON-ERASED oznacza dane do odrzucenia
+- [x] Przygotowano `docs/MIGRATION_16MB_PLAN.md` — plan migracji z warunkami wejścia i zasadą bez zapisów (DRAFT)
 - [ ] Sprawdzić stan bootloadera i przygotować plan bezpiecznej migracji USB bez pełnego kasowania Flash
 - [ ] Plan migracji partycji do pełnej przestrzeni 16 MB: backup/odzyskanie NVS, USB recovery, test rollback
 - [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
