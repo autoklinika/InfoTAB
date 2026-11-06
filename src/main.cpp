@@ -480,7 +480,7 @@ void drawHome() {
         button(777, 450, 335, 90, "ZAPOMNIJ SIEC", TFT_MAROON, 2);
     }
     button(45, 557, 375, 67, "OTA DIAG (ODCZYT)", TFT_NAVY, 2);
-    button(450, 557, 330, 67, "WROC DO PULPITU", TFT_DARKGREEN, 2);
+    button(450, 557, 330, 67, "WROC DO SIECI", TFT_DARKGREEN, 2);
     writeText(45, displayHeight - 62, "Konfiguracja lokalna | bez hasel w GitHub", TFT_LIGHTGREY);
 }
 
@@ -568,7 +568,7 @@ void drawOtaDiag() {
     const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
     const esp_partition_t* boot = esp_ota_get_boot_partition();
     const uint32_t sketchBytes = ESP.getSketchSize();
-    writeText(45, 116, "Firmware InfoTAB: v0.6", TFT_CYAN, 2);
+    writeText(45, 116, "Firmware InfoTAB: v0.7", TFT_CYAN, 2);
     writeText(45, 160, "Obraz programu: " + String(sketchBytes) + " B", TFT_WHITE, 2);
     if (running) {
         writeText(45, 218, "Aktywna: " + String(running->label), TFT_GREEN, 2);
