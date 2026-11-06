@@ -13,6 +13,9 @@ struct Sample {
     bool valid = false;
     uint8_t modeCode = 0;
     uint8_t loadPercent = 0;
+    uint16_t activePowerRegister = 0; // FC03 reg156; scale unverified on this UPS model.
+    uint16_t apparentPowerRegister = 0; // FC03 reg159; diagnostic only.
+    bool powerRegisterValid = false;
     uint8_t batteryPercent = 0;
     uint16_t inputVolts10 = 0;   // /10 -> V
     uint16_t outputVolts10 = 0;  // /10 -> V
@@ -91,6 +94,12 @@ inline bool poll(Sample &result) {
     result.outputVolts10 = output[3];
     result.outputHertz10 = output[0];
     result.loadPercent = static_cast<uint8_t>(output[18]);
+    if (output[12] != 0xFFFF && output[15] != 0xFFFF &&
+        output[12] <= output[15] && output[15] < 5000) {
+        result.activePowerRegister = output[12];  // holding register 156
+        result.apparentPowerRegister = output[15]; // holding register 159
+        result.powerRegisterValid = true;
+    }
     result.batteryPercent = static_cast<uint8_t>(battery[4]);
     result.runtimeSeconds = runtime;
     result.batteryVolts10 = battery[5] == 0xFFFF ? 0 : battery[5];
