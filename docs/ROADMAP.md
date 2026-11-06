@@ -28,6 +28,19 @@
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
+## Etap 3A: v0.6 — docelowy transport i GUI
+
+- [x] Odczyt rzeczywistego PowerWalker przez Modbus TCP `192.168.1.102:502` z Minisforum (FC03, rejestry 112/128/144/165).
+- [x] Zmapowano i potwierdzono baterię 93%, obciążenie 10%, napięcie 230 V, pozostały czas 75:05 w odczycie testowym.
+- [x] Zastąpiono w firmware źródło NUT bezpośrednim Modbus TCP.
+- [x] Usunięto pełne `render()` wykonywane co 5 s; pulpit odświeża tylko zmienne obszary.
+- [x] Dodano nowe rozmieszczenie kart, statusów i przycisków.
+- [x] Dodano ręczny 5-minutowy odbiornik OTA z losowym hasłem na ekranie oraz uploader Windows.
+- [ ] Windows Build v0.6 i kontrola, czy binarka mieści się w 1280 KiB.
+- [ ] Uruchomienie Tab5 v0.6 przez USB-C, odczyt Modbus i brak migania: PASS.
+- [ ] Aktualizacja v0.6 → następne wydanie przez Wi-Fi: PASS.
+- [ ] Produkcyjne uwierzytelnianie/podpisy i rollback: późniejszy etap.
+
 ## Etap 3: telemetria UPS — główny priorytet
 
 - [x] Potwierdzono dostępne pola z QNAP NUT (z Minisforum): `ups.status`, `battery.charge`, `ups.load`, `battery.runtime`.
