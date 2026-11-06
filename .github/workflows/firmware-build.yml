@@ -18,6 +18,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate PowerShell syntax (all Windows scripts)
+        shell: pwsh
+        run: ./scripts/check-powershell-syntax.ps1
+
       - name: Install Python
         uses: actions/setup-python@v5
         with:
