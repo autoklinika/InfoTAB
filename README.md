@@ -124,6 +124,32 @@ Pełna instrukcja: [docs/FLASH_BACKUP.md](docs/FLASH_BACKUP.md).
 
 Do czasu zatwierdzenia backupu: **nie wgrywamy wariantu 16 MB i nie włączamy OTA**.
 
+## InfoTAB v0.5 — pulpit UPS i AI Platform
+
+Zamiast kolejnego etapu migracji OTA rozwijamy działający program.
+W wersji v0.5 dodano ekran z rzeczywistymi danymi QNAP NUT
+(`192.168.1.101:3493`): zasilanie sieciowe/bateria,
+procent naładowania, procent obciążenia UPS i szacunkowy czas
+podtrzymania. Widoczny jest też stan AI Bridge (HTTP 200).
+
+W terminalu VS Code na Windows 11:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
+```
+
+Po `BUILD SUCCESS` dla środowiska domyślnego `infotab_tab5`
+wgrywamy przez COM6:
+
+```powershell
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e infotab_tab5 -t upload
+```
+
+Nie uruchamiamy `infotab_tab5_16mb_audit` z `-t upload`.
+Pełny opis: [docs/DASHBOARD_V05.md](docs/DASHBOARD_V05.md).
+Stan v0.5: **kod na gałęzi roboczej, test Build i test Tab5 do wykonania**.
+
 ## Migracja OTA — preflight bez zapisu do Flash
 
 Pełny backup 16 MiB zakończony `BACKUP VERIFIED - READ ONLY PASS` (2026-11-06).
