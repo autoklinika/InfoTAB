@@ -38,7 +38,9 @@
 - [x] Diagnostyka v0.4 na sprzęcie PASS: app0 0x10000/1280 KiB, app1 0x150000/1280 KiB, boot=running, Wi-Fi online, AI Bridge HTTP 200 (zdjęcia 2026-11-06)
 - [x] Dodano read-only skrypt `scripts/audit-partitions.py` do inspekcji wygenerowanego `partitions.bin` (lokalne uruchomienie PENDING)
 - [x] Rozmiar działającego obrazu odczytany z urządzenia: 932384 B (zdjęcia 2026-11-06)
-- [ ] Lokalny audyt `partitions.bin` wygenerowanego przez PlatformIO i porównanie z urządzeniem
+- [x] Lokalny audyt obecnego `partitions.bin` wykonany; 4 MB layout zgodny ze zdjęciami (użytkownik 2026-11-06)
+- [x] Przygotowano osobny wariant kompilacji `infotab_tab5_16mb_audit` z jawnie wskazanym CSV 16 MB (BUILD + AUDIT PENDING)
+- [ ] Potwierdzić Build i poprawny rozmiar slotów 6,25 MiB w wariancie kandydackim
 - [ ] Plan migracji partycji do pełnej przestrzeni 16 MB: backup/odzyskanie NVS, USB recovery, test rollback
 - [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
 - [ ] Potwierdzony rollback / recovery przez USB
