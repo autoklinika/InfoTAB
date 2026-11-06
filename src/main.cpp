@@ -436,6 +436,105 @@ void checkBridgeHealth() {
     drawOtaDiag();
 }
 
+
+void drawOtaUpload() {
+    header("AKTUALIZACJA FIRMWARE PRZEZ WI-FI");
+    writeText(48, 123, "OTA / TRYB SERWISOWY", TFT_CYAN, 3);
+    writeText(48, 185, "IP InfoTAB: " +
+              (connected() ? WiFi.localIP().toString() : String("BRAK POLACZENIA")),
+              connected() ? TFT_GREEN : TFT_YELLOW, 3);
+    writeText(48, 237, "Port OTA: 3232   |   Slot A/B: 1280 KiB", TFT_WHITE, 2);
+
+    M5.Display.drawRoundRect(43, 302, displayWidth - 86, 201, 12, TFT_DARKGREY);
+    if (otaArmed) {
+        writeText(65, 326, "JEDNORAZOWE HASLO (TYLKO NA EKRANIE)", TFT_LIGHTGREY, 2);
+        writeText(65, 381, otaPassword, TFT_GREEN, 4);
+        writeText(65, 450, otaInProgress ? "AKTUALIZACJA W TOKU..." :
+                  "Aktywne maksymalnie 5 minut.", TFT_YELLOW, 2);
+    } else {
+        writeText(65, 351, "Odbior OTA wylaczony. Aktywuj na 5 minut.", TFT_YELLOW, 2);
+        writeText(65, 426, "Haslo nie jest zapisane na GitHub ani w NVS.", TFT_LIGHTGREY, 2);
+    }
+    M5.Display.fillRect(48, 518, displayWidth - 96, 55, TFT_BLACK);
+    writeText(48, 525, otaStatus.substring(0, 75), TFT_CYAN, 2);
+    button(46, 612, 263, 78, "WROC", TFT_DARKGREY, 2);
+    if (!otaInProgress) {
+        button(331, 612, 403, 78, otaArmed ? "ZATRZYMAJ OTA" : "AKTYWUJ OTA",
+               otaArmed ? TFT_MAROON : TFT_DARKGREEN, 2);
+    }
+    writeText(785, 631, "Nie zmienia partycji Flash", TFT_LIGHTGREY, 2);
+}
+
+void stopOta() {
+    if (otaInProgress) return;
+    if (otaArmed) ArduinoOTA.end();
+    otaArmed = false;
+    otaPassword = "";
+}
+
+void armOta() {
+    if (otaInProgress) return;
+    if (!connected()) {
+        otaStatus = "Brak Wi-Fi. Polacz z siecia.";
+        render();
+        return;
+    }
+    const esp_partition_t *slot = esp_ota_get_next_update_partition(nullptr);
+    if (!slot || slot->size < ESP.getSketchSize()) {
+        otaStatus = "Brak poprawnej partycji OTA.";
+        render();
+        return;
+    }
+    // Random token is generated only when the user manually arms OTA.
+    // Never store token in source, GitHub, NVS or serial logs.
+    static const char alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    otaPassword = "";
+    for (int i = 0; i < 18; ++i)
+        otaPassword += alphabet[esp_random() % (sizeof(alphabet) - 1)];
+
+    ArduinoOTA.setHostname("infotab");
+    ArduinoOTA.setPort(3232);
+    ArduinoOTA.setMdnsEnabled(false);
+    ArduinoOTA.setPassword(otaPassword.c_str());
+    ArduinoOTA.onStart([]() {
+        otaInProgress = true;
+        otaStatus = "Przesylanie firmware...";
+        if (page == Page::OtaUpload) drawOtaUpload();
+        logEvent("OTA transfer started");
+    });
+    ArduinoOTA.onEnd([]() {
+        otaStatus = "Wgrywanie zakonczone. Uruchamianie...";
+        logEvent("OTA transfer completed");
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        otaInProgress = false;
+        otaStatus = "Blad aktualizacji OTA: " + String(static_cast<int>(error));
+        if (page == Page::OtaUpload) drawOtaUpload();
+        logEvent("OTA transfer error");
+    });
+    ArduinoOTA.begin();
+    otaArmedAt = millis();
+    otaArmed = true;
+    otaStatus = "Wpisz haslo w lokalnym skrypcie Windows.";
+    render();
+    logEvent("OTA armed (password never logged)");
+}
+
+void handleOtaUpload(int x, int y) {
+    if (otaInProgress) return;
+    if (inside(x, y, 46, 612, 263, 78)) {
+        stopOta();
+        page = Page::Dashboard;
+        render();
+    } else if (inside(x, y, 331, 612, 403, 78)) {
+        if (otaArmed) {
+            stopOta();
+            otaStatus = "OTA zostalo wylaczone.";
+            render();
+        } else armOta();
+    }
+}
+
 void drawConnecting() {
     header("Laczenie z Wi-Fi");
     writeText(55, 160, "Proba polaczenia...", TFT_CYAN, 3);
@@ -453,6 +552,7 @@ void render() {
         case Page::Password: drawPassword(); break;
         case Page::Connecting: drawConnecting(); break;
         case Page::OtaDiag: drawOtaDiag(); break;
+        case Page::OtaUpload: drawOtaUpload(); break;
     }
 }
 
@@ -714,7 +814,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.5 boot: dashboard + Wi-Fi + read-only OTA diagnostics");
+    logEvent("v0.6 boot: Modbus + differential GUI + on-demand OTA");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
@@ -738,9 +838,19 @@ void loop() {
             case Page::Password: handlePassword(x, y); break;
             case Page::Connecting: handleConnecting(x, y); break;
             case Page::OtaDiag: handleOtaDiag(x, y); break;
+            case Page::OtaUpload: handleOtaUpload(x, y); break;
         }
     }
     updateConnection();
+    if (otaArmed) {
+        if (!otaInProgress && (millis() - otaArmedAt >= OTA_WINDOW_MS || !connected())) {
+            stopOta();
+            otaStatus = "Sesja OTA wygasla lub utracono Wi-Fi.";
+            if (page == Page::OtaUpload) render();
+        } else if (connected()) {
+            ArduinoOTA.handle();
+        }
+    }
     if (page == Page::Dashboard && connected() &&
         (lastDashboardRefresh == 0 ||
          millis() - lastDashboardRefresh >= DASH_REFRESH_MS)) {
@@ -752,11 +862,8 @@ void loop() {
         aiBridgeChecked = true;
         aiBridgeOk = false;
         lastDashboardRefresh = millis();
-        drawDashboard();
+        drawDashboardValues();  // no full-screen repaint
     }
-    if (page == Page::Home && millis() - lastHomeRefresh >= HOME_REFRESH_MS) {
-        lastHomeRefresh = millis();
-        render();
-    }
+    // Wi-Fi settings screen no longer redraws every 5 seconds.
     delay(8);
 }
