@@ -170,67 +170,95 @@ void pollAiBridge() {
     }
 }
 
-void drawDashboard() {
-    header("Pulpit  |  UPS + AI Platform");
-    const uint16_t statusColor = !ups.valid ? TFT_YELLOW :
-                                 ups.onBattery ? TFT_RED : TFT_GREEN;
-    M5.Display.drawRoundRect(32, 112, 792, 464, 14, TFT_DARKGREY);
-    M5.Display.drawRoundRect(846, 112, displayWidth - 878, 464, 14, TFT_DARKGREY);
-    writeText(53, 131, "ZASILANIE UPS", TFT_CYAN, 3);
-    writeText(54, 184, !ups.valid ? "BRAK ODCZYTU NUT" :
-              ups.onBattery ? "AWARIA ZASILANIA - BATERIA" :
-              "ZASILANIE SIECIOWE OK", statusColor, 2);
+// Static screen elements are drawn only when navigating to this page.
+// Dynamic values refresh in small rectangles; NO fillScreen() on any timer.
+void drawDashboardValues() {
+    const bool good = ups.valid;
+    M5.Display.fillRect(52, 183, 742, 48, TFT_BLACK);
+    uint16_t statusColor = good && ups.modeCode == 4 ? TFT_GREEN : TFT_YELLOW;
+    String state = !good ? "MODBUS: BRAK DANYCH" :
+                   ups.modeCode == 4 ? "UPS: TRYB NORMALNY" :
+                   "UPS: TRYB " + String(ups.modeCode) + " (sprawdz)";
+    writeText(53, 188, state, statusColor, 3);
 
-    if (ups.valid) {
-        writeText(55, 255, "BATERIA", TFT_LIGHTGREY, 2);
-        writeText(55, 288, String(ups.batteryPct) + "%", TFT_GREEN, 5);
-        writeText(360, 255, "OBCIAZENIE UPS", TFT_LIGHTGREY, 2);
-        writeText(360, 293, String(ups.loadPct) + "%", TFT_WHITE, 4);
-        writeText(55, 390, "PODTRZYMANIE (SZACUNEK UPS)", TFT_LIGHTGREY, 2);
-        writeText(55, 426, String(ups.runtimeSeconds / 60) + " min", TFT_CYAN, 4);
-        if (ups.lowBattery)
-            writeText(55, 520, "ALARM: NISKI POZIOM BATERII", TFT_RED, 2);
-        else if (ups.charging)
-            writeText(55, 520, "Akumulator: ladowanie", TFT_GREEN, 2);
-        else
-            writeText(55, 520, "Dane z QNAP NUT", TFT_LIGHTGREY, 2);
-    } else {
-        writeText(55, 270, "Sprawdz polaczenie z QNAP", TFT_YELLOW, 2);
-        writeText(55, 313, "192.168.1.101:3493", TFT_WHITE, 2);
-        writeText(55, 363, "Nie pokazujemy nieaktualnych wartosci.", TFT_LIGHTGREY);
-    }
-    writeText(867, 136, "AI PLATFORM", TFT_CYAN, 3);
-    writeText(867, 196, aiBridgeChecked ? (aiBridgeOk ? "ONLINE" : "OFFLINE") :
-              "SPRAWDZANIE", aiBridgeOk ? TFT_GREEN : TFT_YELLOW, 3);
-    writeText(867, 257, "192.168.1.100", TFT_WHITE, 2);
-    writeText(867, 306, "AI Bridge /health", TFT_LIGHTGREY, 2);
-    writeText(867, 375, "INFO TAB / SIEC", TFT_CYAN, 2);
-    writeText(867, 423, connected() ? WiFi.localIP().toString() :
-              String("BRAK WI-FI"), connected() ? TFT_GREEN : TFT_YELLOW, 2);
-    writeText(867, 474, connected() ? String(WiFi.RSSI()) + " dBm" :
-              String("Wybierz SIEC WIFI"), TFT_LIGHTGREY, 2);
-    button(32, 608, 264, 85, "ODSWIEZ", TFT_DARKCYAN, 2);
-    button(316, 608, 286, 85, "SIEC WIFI", TFT_DARKGREEN, 2);
-    button(622, 608, 300, 85, "OTA DIAG", TFT_NAVY, 2);
-    writeText(960, 635, "InfoTAB v0.5", TFT_LIGHTGREY, 2);
+    M5.Display.fillRect(53, 312, 206, 67, TFT_BLACK);
+    M5.Display.fillRect(314, 312, 205, 67, TFT_BLACK);
+    M5.Display.fillRect(565, 312, 240, 67, TFT_BLACK);
+    writeText(53, 320, good ? String(ups.batteryPct) + "%" : "--",
+              good ? TFT_GREEN : TFT_YELLOW, 4);
+    writeText(314, 320, good ? String(ups.loadPct) + "%" : "--",
+              good ? TFT_WHITE : TFT_YELLOW, 4);
+    writeText(565, 320, good ? String(ups.runtimeSeconds / 60) + " min" : "--",
+              good ? TFT_CYAN : TFT_YELLOW, 4);
+
+    M5.Display.fillRect(53, 471, 232, 53, TFT_BLACK);
+    M5.Display.fillRect(320, 471, 250, 53, TFT_BLACK);
+    writeText(53, 476, good ? String(ups.inputVoltTenths / 10.0f, 1) + " V" : "--",
+              good ? TFT_WHITE : TFT_YELLOW, 3);
+    writeText(320, 476, good ? String(ups.outputVoltTenths / 10.0f, 1) + " V" : "--",
+              good ? TFT_WHITE : TFT_YELLOW, 3);
+
+    M5.Display.fillRect(865, 210, 355, 49, TFT_BLACK);
+    writeText(867, 215, aiBridgeChecked ?
+             (aiBridgeOk ? "ONLINE" : "OFFLINE") : "SPRAWDZANIE",
+             aiBridgeOk ? TFT_GREEN : TFT_YELLOW, 3);
+    M5.Display.fillRect(865, 330, 355, 46, TFT_BLACK);
+    writeText(867, 338, connected() ? WiFi.localIP().toString() :
+              String("BRAK WI-FI"), connected() ? TFT_CYAN : TFT_YELLOW, 2);
+    M5.Display.fillRect(865, 459, 355, 50, TFT_BLACK);
+    writeText(867, 466, connected() ? String(WiFi.RSSI()) + " dBm" :
+              String("BRAK SYGNALU"), TFT_WHITE, 2);
+    M5.Display.fillRect(53, 547, 740, 26, TFT_BLACK);
+    writeText(53, 550, "Zrodlo: MODBUS TCP 192.168.1.102:502 | FC03", TFT_LIGHTGREY, 2);
+}
+
+void drawDashboard() {
+    header("PULPIT SYSTEMOWY   /   UPS + AI PLATFORM");
+    M5.Display.drawRoundRect(32, 110, 788, 478, 14, TFT_DARKCYAN);
+    M5.Display.drawRoundRect(844, 110, displayWidth - 876, 478, 14, TFT_DARKGREY);
+    M5.Display.fillRect(34, 112, 784, 7, TFT_DARKCYAN);
+    M5.Display.fillRect(846, 112, displayWidth - 880, 7, TFT_DARKGREEN);
+    writeText(53, 138, "ZASILANIE AWARYJNE", TFT_CYAN, 3);
+    writeText(53, 266, "BATERIA", TFT_LIGHTGREY);
+    writeText(314, 266, "OBCIAZENIE", TFT_LIGHTGREY);
+    writeText(565, 266, "CZAS UPS*", TFT_LIGHTGREY);
+    M5.Display.drawFastHLine(54, 407, 733, TFT_DARKGREY);
+    writeText(53, 428, "WEJSCIE", TFT_LIGHTGREY);
+    writeText(320, 428, "WYJSCIE", TFT_LIGHTGREY);
+    writeText(563, 428, "*szacowany czas", TFT_LIGHTGREY, 2);
+    writeText(867, 145, "AI PLATFORM", TFT_CYAN, 3);
+    writeText(867, 185, "AI Bridge /health", TFT_LIGHTGREY);
+    M5.Display.drawFastHLine(867, 289, displayWidth - 906, TFT_DARKGREY);
+    writeText(867, 302, "ADRES INFOTAB", TFT_LIGHTGREY);
+    M5.Display.drawFastHLine(867, 414, displayWidth - 906, TFT_DARKGREY);
+    writeText(867, 427, "SYGNAL WI-FI", TFT_LIGHTGREY);
+    button(32, 608, 230, 82, "ODSWIEZ", TFT_DARKCYAN, 2);
+    button(285, 608, 230, 82, "SIEC WIFI", TFT_DARKGREEN, 2);
+    button(538, 608, 230, 82, "OTA WIFI", TFT_NAVY, 2);
+    button(791, 608, 235, 82, "OTA DIAG", TFT_DARKGREY, 2);
+    writeText(1040, 636, "v0.6", TFT_LIGHTGREY, 2);
+    drawDashboardValues();
 }
 
 void refreshDashboard() {
     pollUpsReadOnly();
     pollAiBridge();
     lastDashboardRefresh = millis();
-    if (page == Page::Dashboard) drawDashboard();
+    if (page == Page::Dashboard) drawDashboardValues();
 }
 
 void handleDashboard(int x, int y) {
-    if (inside(x, y, 32, 608, 264, 85)) {
+    if (inside(x, y, 32, 608, 230, 82)) {
         refreshDashboard();
-    } else if (inside(x, y, 316, 608, 286, 85)) {
+    } else if (inside(x, y, 285, 608, 230, 82)) {
         page = Page::Home;
         render();
-    } else if (inside(x, y, 622, 608, 300, 85)) {
+    } else if (inside(x, y, 538, 608, 230, 82)) {
+        page = Page::OtaUpload;
+        render();
+    } else if (inside(x, y, 791, 608, 235, 82)) {
         page = Page::OtaDiag;
-        infoMessage = "Odczyt partycji - bez aktualizacji OTA.";
+        infoMessage = "Odczyt partycji - bez zmiany Flash.";
         render();
     }
 }
@@ -663,6 +691,7 @@ void updateConnection() {
         infoMessage = stored ? "Polaczenie udane." :
                               "Polaczono, ale zapis ustawien nie powiodl sie.";
         page = Page::Dashboard;
+        render();
         refreshDashboard();
         logEvent("Wi-Fi connected; IP available on dashboard");
     } else if (millis() - connectionStart > CONNECT_TIMEOUT_MS) {
