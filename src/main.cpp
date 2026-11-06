@@ -1009,7 +1009,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.6 boot: Modbus + differential GUI + on-demand OTA");
+    logEvent("v0.7 boot: four-page swipe HMI + Modbus + OTA");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
@@ -1023,11 +1023,46 @@ void setup() {
 void loop() {
     M5.update();
     const auto touch = M5.Touch.getDetail();
-    if (touch.wasClicked()) {
+    // Gesture recognition: only 4 main pages accept horizontal swipes.
+    // A press/release with <90 px travel remains a normal button tap.
+    static bool trackingTouch = false;
+    static int startX = 0, startY = 0, lastX = 0, lastY = 0;
+    static uint32_t touchStartedAt = 0;
+    if (touch.wasPressed() && mainPage(page)) {
+        trackingTouch = true;
+        startX = lastX = touch.x;
+        startY = lastY = touch.y;
+        touchStartedAt = millis();
+    }
+    if (trackingTouch && touch.isPressed()) {
+        lastX = touch.x;
+        lastY = touch.y;
+    }
+
+    bool handledSwipe = false;
+    if (trackingTouch && !touch.isPressed()) {
+        trackingTouch = false;
+        const int deltaX = lastX - startX;
+        const int deltaY = lastY - startY;
+        if (mainPage(page) && abs(deltaX) >= 90 &&
+            abs(deltaX) > 2 * abs(deltaY) &&
+            millis() - touchStartedAt < 1500) {
+            const int next = mainPageIndex(page) + (deltaX < 0 ? 1 : -1);
+            if (next >= 0 && next <= 3) {
+                openMainPage(mainPageByIndex(next));
+                handledSwipe = true;
+            }
+        }
+    }
+    // Tap is dispatched only if no swipe was recognized.
+    if (!handledSwipe && touch.wasClicked()) {
         const int x = touch.x;
         const int y = touch.y;
         switch (page) {
             case Page::Dashboard: handleDashboard(x, y); break;
+            case Page::Power: handlePower(x, y); break;
+            case Page::NetworkInfo: handleNetworkInfo(x, y); break;
+            case Page::Service: handleService(x, y); break;
             case Page::Home: handleHome(x, y); break;
             case Page::Networks: handleNetworks(x, y); break;
             case Page::Password: handlePassword(x, y); break;
@@ -1036,9 +1071,11 @@ void loop() {
             case Page::OtaUpload: handleOtaUpload(x, y); break;
         }
     }
+
     updateConnection();
     if (otaArmed) {
-        if (!otaInProgress && (millis() - otaArmedAt >= OTA_WINDOW_MS || !connected())) {
+        if (!otaInProgress &&
+            (millis() - otaArmedAt >= OTA_WINDOW_MS || !connected())) {
             stopOta();
             otaStatus = "Sesja OTA wygasla lub utracono Wi-Fi.";
             if (page == Page::OtaUpload) render();
@@ -1046,19 +1083,12 @@ void loop() {
             ArduinoOTA.handle();
         }
     }
-    if (page == Page::Dashboard && connected() &&
+
+    // No full-screen redraw on refresh. Only the visible data fields change.
+    if (mainPage(page) &&
         (lastDashboardRefresh == 0 ||
          millis() - lastDashboardRefresh >= DASH_REFRESH_MS)) {
         refreshDashboard();
     }
-    if (page == Page::Dashboard && !connected() &&
-        millis() - lastDashboardRefresh >= DASH_REFRESH_MS) {
-        ups.valid = false;
-        aiBridgeChecked = true;
-        aiBridgeOk = false;
-        lastDashboardRefresh = millis();
-        drawDashboardValues();  // no full-screen repaint
-    }
-    // Wi-Fi settings screen no longer redraws every 5 seconds.
     delay(8);
 }
