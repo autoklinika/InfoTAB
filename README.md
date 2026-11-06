@@ -4,7 +4,7 @@ Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
 
 ## Status
 
-v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: PASS** dla dotyku i skanowania Wi-Fi na rzeczywistym Tab5. **v0.3: połączenie z Wi-Fi skonfigurowane na ekranie — PASS pierwszego połączenia (2026-11-06).** Automatyczne połączenie po restarcie — PASS, aktualny IP DHCP 192.168.1.38. OTA i integracja UPS nadal do wdrożenia. OTA i integracja UPS pozostają do wykonania.
+v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: PASS** dla dotyku i skanowania Wi-Fi na rzeczywistym Tab5. **v0.3: połączenie z Wi-Fi skonfigurowane na ekranie — PASS pierwszego połączenia (2026-11-06).** Automatyczne połączenie po restarcie — PASS, aktualny IP DHCP 192.168.1.38. v0.4-preflight zawiera ekran odczytu partycji OTA i test AI Bridge; kompilacja oraz test na Tab5 PENDING. Aktualizacje OTA i integracja UPS nie są jeszcze wdrożone.
 
 **Zasada:** gałąź `main` pozostaje stabilna; zmiany z gałęzi roboczych są scalane wyłącznie po zatwierdzeniu.
 
@@ -49,3 +49,21 @@ Logowanie przez COM6, 115200 bps (zamknij inne aplikacje zajmujące port):
 
 Dokumentacja Wi-Fi i pinów SDIO: https://docs.m5stack.com/en/arduino/m5tab5/wifi
 Dotyk: https://docs.m5stack.com/en/arduino/m5unified/touch_class
+
+## InfoTAB v0.4-preflight (read-only)
+
+Na ekranie głównym wybierz `OTA DIAG (ODCZYT)`. Wyświetli aktywną partycję,
+zapasowy slot oraz rozmiar firmware. Przycisk `TEST AI BRIDGE` wykona tylko
+GET na `192.168.1.100:8080/health`. Żadnych zapisów do Flash ani aktualizacji OTA.
+
+Instrukcja i weryfikacja: [docs/OTA_DESIGN.md](docs/OTA_DESIGN.md).
+
+Aby przetestować nowy obraz na Windows 11:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
+```
+
+Po BUILD SUCCESS wgrywaj przez dotychczasowy port COM6. Do zatwierdzenia
+testu sprzętowego zachowujemy możliwość powrotu do działającej v0.3.
