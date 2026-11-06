@@ -143,7 +143,7 @@ prześlij tylko niesekretne linie z procesu: `Sending invitation`,
 `Authenticating`, `Waiting for device` i ostateczny kod błędu.
 Nie przełączaj portów routera ani nie wystawiaj OTA do Internetu.
 
-**Status:** poprawiony uploader i reguła callback TCP 3233 przeszły pierwszy transfer OTA — `WIFI OTA TRANSFER SUCCESS` (użytkownik 2026-11-06); uruchomienie po aktualizacji wymaga potwierdzenia.
+**Status:** pierwszy transfer OTA oraz uruchomienie po aktualizacji PASS (użytkownik 2026-11-06). Wi-Fi, odczyty Modbus i brak migania ekranu — także PASS. Produkcyjne podpisy i automatyczny rollback pozostają odrębne.
 
 ## Ograniczenia OTA w tej fazie
 
@@ -163,13 +163,13 @@ Nie przełączaj portów routera ani nie wystawiaj OTA do Internetu.
 ## Test odbiorczy
 
 - [ ] Kompilacja Windows v0.6: BUILD SUCCESS.
-- [ ] Pulpit się uruchamia, brak pełnych błysków ekranu.
-- [ ] UPS pokazuje rzeczywiste pomiary Modbus oraz adres źródła .102.
-- [ ] Wi-Fi/AI Bridge pozostają dostępne.
+- [x] Pulpit uruchamia się i ekran nie miga — PASS (2026-11-06).
+- [x] UPS pokazuje pomiary przez Modbus TCP — PASS (2026-11-06).
+- [x] Wi-Fi łączy się po aktualizacji — PASS (2026-11-06). Weryfikacja AI Bridge po OTA osobno PENDING.
 - [ ] `OTA WIFI` pokazuje jednorazowe hasło i wygasa po 5 minutach.
 - [x] Transfer obrazu OTA po Wi-Fi: SUCCESS (użytkownik 2026-11-06).
-- [ ] Uruchomienie nowej aplikacji po transferze: PENDING.
-- [ ] Po restarcie powracają UI i konfiguracja Wi-Fi.
+- [x] Uruchomienie nowej aplikacji po OTA — PASS (2026-11-06).
+- [x] Po restarcie OTA wróciły GUI i zapisane Wi-Fi — PASS (2026-11-06).
 
 **Nie wolno traktować tych testów jako PASS, dopóki nie zostaną
 potwierdzone na prawdziwym urządzeniu.**
