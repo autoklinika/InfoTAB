@@ -160,6 +160,11 @@ void setup() {
     auto cfg = M5.config();
     M5.begin(cfg);
     M5.Display.setRotation(1);
+    // Tab5 panel revisions can differ in their default orientation.
+    // Keep the diagnostics UI in landscape (wider than tall).
+    if (M5.Display.width() < M5.Display.height()) {
+        M5.Display.setRotation(0);
+    }
     screenWidth = M5.Display.width();
     screenHeight = M5.Display.height();
     drawBaseScreen();
