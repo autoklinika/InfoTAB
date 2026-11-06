@@ -90,6 +90,61 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-window
 
 i podmień IP na adres aktualnie wyświetlany na InfoTAB.
 
+## Diagnostyka OTA na Windows 11 — brak połączenia zwrotnego
+
+W pierwszym teście użytkownik otrzymał w `espota.py`:
+
+```text
+[ERROR]: No response from device
+Wi-Fi OTA transfer FAILED (exit code 1)
+```
+
+Sprawdzono dokładny przepływ `tools/espota.py` Arduino ESP32 3.2.1:
+ten błąd pojawia się **po wymianie zaproszenia UDP i ewentualnym
+uwierzytelnieniu**, kiedy Windows uruchamia lokalny nasłuch TCP i czeka
+na połączenie zwrotne z InfoTAB. Nie oznacza automatycznie problemu
+z hasłem, kompilacją czy rozmiarem firmware.
+
+Dotychczasowy uploader używał losowego portu TCP (10000–60000),
+który mógł być blokowany przez Windows Defender Firewall.
+Dodatkowo pobierał pierwszy interfejs `192.168.1.*`, co nie zawsze
+odpowiada trasie do urządzenia w komputerach z VPN/adapterami wirtualnymi.
+
+**Poprawka:** stały callback TCP `3233` oraz automatyczny wybór
+adresu lokalnego przez trasę UDP do InfoTAB. Jednorazowo trzeba
+utworzyć wąską regułę inbound w zaporze Windows, wyłącznie dla:
+`Program = PlatformIO python.exe`, `LocalPort TCP 3233`,
+`RemoteAddress = aktualny IP InfoTAB`, `LocalAddress = IP komputera`.
+
+Na Windows 11:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-ota-firewall-windows.ps1
+```
+
+Może pojawić się okno UAC — jest potrzebne tylko do zapisania reguły
+zapory. Nie wyłączaj Windows Defender Firewall i nie twórz otwartego
+portu dla wszystkich urządzeń.
+
+**Kolejność testu:** po ustawieniu zapory uruchom uploader.
+Najpierw kompiluje firmware, a potem prosi o token. Dopiero wtedy
+na ekranie `OTA WIFI → AKTYWUJ OTA` włącz sesję na 5 minut
+i wpisz wyświetlony token w terminalu. Nie umieszczaj tokenu
+w rozmowie ani w repozytorium.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1
+```
+
+Jeśli IP InfoTAB nie jest już `192.168.1.38`, uruchom **oba skrypty**
+z `-DeviceIp` ustawionym na aktualny adres. W razie ponownego błędu
+prześlij tylko niesekretne linie z procesu: `Sending invitation`,
+`Authenticating`, `Waiting for device` i ostateczny kod błędu.
+Nie przełączaj portów routera ani nie wystawiaj OTA do Internetu.
+
+**Status:** poprawka przygotowana, test ponownego OTA PENDING.
+
 ## Ograniczenia OTA w tej fazie
 
 - Jest to lokalne **ArduinoOTA do zastosowań deweloperskich**:
