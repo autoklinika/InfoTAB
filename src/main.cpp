@@ -253,11 +253,14 @@ void checkBridgeHealth() {
         drawOtaDiag();
         return;
     }
+    NetworkClient client;
     HTTPClient http;
     http.setConnectTimeout(1500);
     http.setTimeout(2000);
     int status = -1;
-    if (http.begin(BRIDGE_HEALTH)) {
+    // Arduino ESP32 3.2.1: prefer the unconditional begin(NetworkClient&, String)
+    // rather than the optional legacy begin(String) overload.
+    if (http.begin(client, String(BRIDGE_HEALTH))) {
         status = http.GET();
         http.end();
     }
