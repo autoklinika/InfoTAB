@@ -433,31 +433,45 @@ void drawNetwork() {
            UI_MUTED, 2, UI_BG);
     drawNetworkValues();
 }
+// All configuration and maintenance actions are on this page.
 void drawServiceValues() {
-    valueAt(63, 205, 520, 58, "InfoTAB v0.8", UI_WHITE, 3);
-    valueAt(670, 205, 520, 58, otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
-            otaArmed ? UI_GOOD : UI_MUTED, 3);
-    valueAt(63, 340, 520, 38,
-            String("Uptime: ") + String(millis() / 60000) + " min", UI_WHITE, 2);
+    valueAt(57, 136, 540, 47,
+            connected() ? String("ONLINE  /  ") + WiFi.localIP().toString() :
+            String("WIFI NIEDOSTEPNE"), connected() ? UI_GOOD : UI_WARNING, 2);
+    valueAt(675, 136, 535, 47,
+            otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
+            otaArmed ? UI_GOOD : UI_WHITE, 2);
+    valueAt(57, 427, 540, 44, "InfoTAB v0.9", UI_WHITE, 3);
+    valueAt(57, 509, 540, 39,
+            String("Czas pracy: ") + String(millis() / 60000) + " min", UI_MUTED, 2);
 }
 void drawService() {
-    tabShell("SERWIS", 3);
-    panel(32, 110, 576, 324);
-    panel(639, 110, 609, 324);
-    uiText(63, 146, "OPROGRAMOWANIE", UI_MUTED);
-    uiText(63, 297, "CZAS PRACY", UI_MUTED);
-    uiText(670, 146, "AKTUALIZACJA WI-FI", UI_MUTED);
-    uiText(670, 298, "Sesja OTA tylko na zadanie", UI_MUTED);
-    M5.Display.fillRoundRect(43, 455, 368, 76, 9, UI_CARD);
-    M5.Display.fillRoundRect(448, 455, 368, 76, 9, UI_CARD);
-    M5.Display.fillRoundRect(853, 455, 366, 76, 9, UI_CARD);
-    uiText(66, 482, "OTA WIFI", UI_ACCENT);
-    uiText(472, 482, "DIAGNOSTYKA", UI_WHITE);
-    uiText(877, 482, "KONFIG. WIFI", UI_WHITE);
-    uiText(42, 575, "Przesun lewo / prawo, aby zmienic ekran.",
-           UI_MUTED, 2, UI_BG);
+    tabShell("", 3);
+    panel(32, 24, 595, 265);
+    panel(651, 24, 597, 265);
+    panel(32, 308, 595, 266);
+    panel(651, 308, 597, 266);
+
+    uiText(57, 55, "WI-FI", UI_WHITE, 3);
+    uiText(57, 105, "POLACZENIE INFOTAB", UI_MUTED);
+    M5.Display.fillRoundRect(57, 207, 540, 63, 9, UI_BORDER);
+    uiText(81, 228, "KONFIGURUJ SIEC", UI_WHITE, 2, UI_BORDER);
+
+    uiText(675, 55, "OTA / WIFI", UI_WHITE, 3);
+    uiText(675, 105, "AKTUALIZACJA FIRMWARE", UI_MUTED);
+    M5.Display.fillRoundRect(675, 207, 540, 63, 9, UI_BORDER);
+    uiText(699, 228, "AKTUALIZUJ", UI_WHITE, 2, UI_BORDER);
+
+    uiText(57, 337, "OPROGRAMOWANIE", UI_WHITE, 3);
+    uiText(57, 390, "WERSJA SYSTEMU", UI_MUTED);
+
+    uiText(675, 337, "DIAGNOSTYKA", UI_WHITE, 3);
+    uiText(675, 390, "PARTYCJE / AI BRIDGE", UI_MUTED);
+    M5.Display.fillRoundRect(675, 489, 540, 64, 9, UI_BORDER);
+    uiText(699, 511, "OTWORZ DIAGNOSTYKE", UI_WHITE, 2, UI_BORDER);
     drawServiceValues();
 }
+
 void drawDashboardValues() {
     switch(page) {
         case Page::Dashboard: drawOverviewValues(); break;
@@ -479,6 +493,7 @@ void openMainPage(Page target) {
     if (!mainPage(target) || page == target) return;
     page = target;
     render();
+    lastDashboardRefresh = 0; // fetch fresh data for newly selected module
 }
 bool handleNavigationTap(int x, int y) {
     if (!mainPage(page) || y < 632 || y > 708) return false;
@@ -499,23 +514,19 @@ void handlePower(int x, int y) {
     handleNavigationTap(x,y);
 }
 void handleNetworkInfo(int x, int y) {
-    if (handleNavigationTap(x,y)) return;
-    if (inside(x,y,42,555,369,53)) {
-        page=Page::Home;
-        render();
-    }
+    handleNavigationTap(x,y);
 }
 void handleService(int x, int y) {
     if (handleNavigationTap(x,y)) return;
-    if (inside(x,y,43,455,368,76)) {
+    if (inside(x,y,57,207,540,63)) {
+        page=Page::Home;
+        render();
+    } else if (inside(x,y,675,207,540,63)) {
         page=Page::OtaUpload;
         render();
-    } else if (inside(x,y,448,455,368,76)) {
+    } else if (inside(x,y,675,489,540,64)) {
         page=Page::OtaDiag;
-        infoMessage="Odczyt partycji - bez zmiany Flash.";
-        render();
-    } else if (inside(x,y,853,455,366,76)) {
-        page=Page::Home;
+        infoMessage="Diagnostyka odczytu; bez zmiany Flash.";
         render();
     }
 }
@@ -545,7 +556,7 @@ void drawHome() {
         button(777, 450, 335, 90, "ZAPOMNIJ SIEC", TFT_MAROON, 2);
     }
     button(45, 557, 375, 67, "OTA DIAG (ODCZYT)", TFT_NAVY, 2);
-    button(450, 557, 330, 67, "WROC DO SIECI", TFT_DARKGREEN, 2);
+    button(450, 557, 330, 67, "DO USTAWIEN", TFT_DARKGREEN, 2);
     writeText(45, displayHeight - 62, "Konfiguracja lokalna | bez hasel w GitHub", TFT_LIGHTGREY);
 }
 
@@ -924,7 +935,7 @@ void selectNetwork(int index) {
 
 void handleHome(int x, int y) {
     if (inside(x, y, 450, 557, 330, 67)) {
-        page = Page::NetworkInfo;
+        page = Page::Service;
         render();
     } else if (inside(x, y, 45, 557, 375, 67)) {
         page = Page::OtaDiag;
@@ -1067,7 +1078,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.8 boot: brighter HMI, power tile and manual passwordless OTA");
+    logEvent("v0.9 boot: AI Platform/NAS/UPS/Settings modular HMI");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
