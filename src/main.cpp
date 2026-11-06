@@ -97,7 +97,7 @@ bool inside(int x, int y, int bx, int by, int w, int h) {
 }
 
 void writeText(int x, int y, const String& value, uint16_t color, int scale = 2) {
-    M5.Display.setTextColor(color, 0x29C9);
+    M5.Display.setTextColor(color, 0x322A);
     M5.Display.setTextSize(scale);
     M5.Display.setCursor(x, y);
     M5.Display.print(value);
@@ -114,13 +114,13 @@ void button(int x, int y, int w, int h, const String& label,
 }
 
 void header(const String& title) {
-    M5.Display.fillScreen(0x29C9);
-    M5.Display.fillRect(0, 0, displayWidth, 90, 0x3A8C);
-    M5.Display.setTextColor(0x7E37, 0x3A8C);
+    M5.Display.fillScreen(0x322A);
+    M5.Display.fillRect(0, 0, displayWidth, 90, 0x532E);
+    M5.Display.setTextColor(0x8678, 0x532E);
     M5.Display.setTextSize(3);
     M5.Display.setCursor(MARGIN, 22);
     M5.Display.print("InfoTAB");
-    M5.Display.setTextColor(0xF7BE, 0x3A8C);
+    M5.Display.setTextColor(0xFFFF, 0x532E);
     M5.Display.setTextSize(2);
     M5.Display.setCursor(MARGIN + 310, 34);
     M5.Display.print(title);
@@ -178,14 +178,14 @@ void pollAiBridge() {
 // Dynamic values refresh in small rectangles; NO fillScreen() on any timer.
 // InfoTAB v0.7: restrained industrial HMI, 4 horizontal swipe pages.
 // Only page changes clear the whole LCD. Telemetry changes repaint values.
-static constexpr uint16_t UI_BG = 0x29C9;    // brighter charcoal
-static constexpr uint16_t UI_CARD = 0x3A8C;  // medium graphite
-static constexpr uint16_t UI_BORDER = 0x6390;
-static constexpr uint16_t UI_WHITE = 0xF7BE;
-static constexpr uint16_t UI_MUTED = 0xBE5A;
-static constexpr uint16_t UI_ACCENT = 0x7E37; // muted teal
-static constexpr uint16_t UI_GOOD = 0x86B4;
-static constexpr uint16_t UI_WARNING = 0xF62F;
+static constexpr uint16_t UI_BG = 0x322A;    // brighter charcoal
+static constexpr uint16_t UI_CARD = 0x532E;  // medium graphite
+static constexpr uint16_t UI_BORDER = 0x7453;
+static constexpr uint16_t UI_WHITE = 0xFFFF;
+static constexpr uint16_t UI_MUTED = 0xD71D;
+static constexpr uint16_t UI_ACCENT = 0x8678; // muted teal
+static constexpr uint16_t UI_GOOD = 0x9EF6;
+static constexpr uint16_t UI_WARNING = 0xFE93;
 
 bool mainPage(Page p) {
     return p == Page::Dashboard || p == Page::Power ||
@@ -654,7 +654,7 @@ void drawOtaUpload() {
         writeText(65, 351, "Odbior OTA wylaczony. Aktywuj na 5 minut.", TFT_YELLOW, 2);
         writeText(65, 426, "Haslo nie jest zapisane na GitHub ani w NVS.", TFT_LIGHTGREY, 2);
     }
-    M5.Display.fillRect(48, 518, displayWidth - 96, 55, 0x29C9);
+    M5.Display.fillRect(48, 518, displayWidth - 96, 55, 0x322A);
     writeText(48, 525, otaStatus.substring(0, 75), TFT_CYAN, 2);
     button(46, 612, 263, 78, "WROC", TFT_DARKGREY, 2);
     if (!otaInProgress) {
