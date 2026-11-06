@@ -36,11 +36,12 @@
 ## Etap 4: OTA
 - [x] Ustalono konflikt: board manifest sugeruje `default_16MB.csv` (app0/app1 po 6,25 MiB), ale **urządzenie faktycznie używa** app0/app1 po **1280 KiB** (`default.csv` / layout 4 MB). OTA BLOCKED do rozwiązania.
 - [x] Diagnostyka v0.4 na sprzęcie PASS: app0 0x10000/1280 KiB, app1 0x150000/1280 KiB, boot=running, Wi-Fi online, AI Bridge HTTP 200 (zdjęcia 2026-11-06)
-- [x] Dodano read-only skrypt `scripts/audit-partitions.py` do inspekcji wygenerowanego `partitions.bin` (lokalne uruchomienie PENDING)
+- [x] Dodano i uruchomiono read-only `scripts/audit-partitions.py` (standardowy build i wariant 16 MB: oba PASS 2026-11-06)
 - [x] Rozmiar działającego obrazu odczytany z urządzenia: 932384 B (zdjęcia 2026-11-06)
 - [x] Lokalny audyt obecnego `partitions.bin` wykonany; 4 MB layout zgodny ze zdjęciami (użytkownik 2026-11-06)
-- [x] Przygotowano osobny wariant kompilacji `infotab_tab5_16mb_audit` z jawnie wskazanym CSV 16 MB (BUILD + AUDIT PENDING)
-- [ ] Potwierdzić Build i poprawny rozmiar slotów 6,25 MiB w wariancie kandydackim
+- [x] Przygotowano osobny wariant kompilacji `infotab_tab5_16mb_audit` z jawnie wskazanym CSV 16 MB; BUILD PASS (2026-11-06, 02:03)
+- [x] Potwierdzono lokalnie dwa sloty OTA po 6400 KiB, firmware 932416 B, wolne 5621184 B w każdym (2026-11-06)
+- [ ] Potwierdzić przez COM6 rzeczywistą pojemność układu Flash — skrypt `scripts/probe-flash-windows.ps1` (wyłącznie odczyt)
 - [ ] Plan migracji partycji do pełnej przestrzeni 16 MB: backup/odzyskanie NVS, USB recovery, test rollback
 - [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
 - [ ] Potwierdzony rollback / recovery przez USB
