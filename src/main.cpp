@@ -176,9 +176,10 @@ void drawDashboardValues() {
     const bool good = ups.valid;
     M5.Display.fillRect(52, 183, 742, 48, TFT_BLACK);
     uint16_t statusColor = good && ups.modeCode == 4 ? TFT_GREEN : TFT_YELLOW;
-    String state = !good ? "MODBUS: BRAK DANYCH" :
-                   ups.modeCode == 4 ? "UPS: TRYB NORMALNY" :
-                   "UPS: TRYB " + String(ups.modeCode) + " (sprawdz)";
+    String state;
+    if (!good) state = "MODBUS: BRAK DANYCH";
+    else if (ups.modeCode == 4) state = "UPS: TRYB NORMALNY";
+    else state = String("UPS: TRYB ") + String(ups.modeCode) + " (sprawdz)";
     writeText(53, 188, state, statusColor, 3);
 
     M5.Display.fillRect(53, 312, 206, 67, TFT_BLACK);
@@ -376,7 +377,7 @@ void drawOtaDiag() {
     const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
     const esp_partition_t* boot = esp_ota_get_boot_partition();
     const uint32_t sketchBytes = ESP.getSketchSize();
-    writeText(45, 116, "Firmware InfoTAB: v0.4-preflight", TFT_CYAN, 2);
+    writeText(45, 116, "Firmware InfoTAB: v0.6", TFT_CYAN, 2);
     writeText(45, 160, "Obraz programu: " + String(sketchBytes) + " B", TFT_WHITE, 2);
     if (running) {
         writeText(45, 218, "Aktywna: " + String(running->label), TFT_GREEN, 2);
