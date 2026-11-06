@@ -1,0 +1,16 @@
+# PlatformIO build output, dependencies and local configuration
+.pio/
+.pioenvs/
+.piolibdeps/
+.vscode/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Credentials: never commit real Wi-Fi or API secrets
+.env
+.env.*
+secrets.h
+src/secrets.h
+include/secrets.h
