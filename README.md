@@ -99,3 +99,27 @@ git pull --ff-only
 
 Jeśli nie ma `partitions.bin`, najpierw wykonaj zwykły Build
 (`scripts/build-windows.ps1`). **Na razie bez Upload.**
+
+## Backup Flash przed migracją do 16 MB (TYLKO ODCZYT)
+
+**Flash ID PASS**: ESP32-P4 rev. 1.3, fizyczne 16 MB Flash (2026-11-06).
+Wariant 16 MB skompilowano i sprawdzono, ale na urządzeniu nadal
+obowiązuje działający układ 4 MB.
+
+Przed zmianą partycji wykonaj **lokalny** backup 16 MB przez COM6:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\backup-flash-windows.ps1
+```
+
+Backup jest zapisywany do `%LOCALAPPDATA%\InfoTAB\FlashBackups`,
+poza GitHubem. Skrypt sprawdza SHA-256, wielkość zrzutu i oryginalne
+partycje bez odczytywania haseł w terminalu.
+
+**Plik .bin może zawierać hasło Wi-Fi — nie przesyłaj go do czatu, GitHuba
+ani publicznej chmury.** Stosuj szyfrowanie dysku Windows (BitLocker).
+
+Pełna instrukcja: [docs/FLASH_BACKUP.md](docs/FLASH_BACKUP.md).
+
+Do czasu zatwierdzenia backupu: **nie wgrywamy wariantu 16 MB i nie włączamy OTA**.
