@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <cstring>
 #include <M5Unified.h>
 #include <Preferences.h>
 #include <WiFi.h>
