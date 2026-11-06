@@ -140,3 +140,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\preflight-migratio
 Skrypt nie czyta haseł Wi-Fi w postaci tekstowej i nie zapisuje Flash.
 Prześlij jedynie wynik tekstowy preflight, nigdy kopię 16 MiB.
 Migracja USB i OTA pozostają ZABLOKOWANE do przejrzenia wyników.
+
+## Preflight migracji 16 MB — zweryfikowany na urządzeniu
+
+Odczyt ROM/eFuse zakończony: Secure Boot **Disabled**,
+Flash Encryption **Disabled**, a `SPI_BOOT_CRYPT_CNT=0` (2026-11-06).
+Pełny backup jest poprawny, ale stare `app1`, `spiffs` i
+`coredump` mają niepuste dane w obszarach zajmowanych
+przez nową partycję `app0`.
+
+**Migracja pozostaje wstrzymana.** Plan i warunki bezpieczeństwa:
+[docs/MIGRATION_16MB_PLAN.md](docs/MIGRATION_16MB_PLAN.md).
+
+Nie wykonuj Upload nowej tabeli przed identyfikacją danych i przygotowaniem
+sprawdzonej ścieżki przywracania.
