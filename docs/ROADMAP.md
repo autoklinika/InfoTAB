@@ -17,8 +17,11 @@
 ## Etap 2: sieć
 - [x] Skanowanie Wi-Fi przez ESP32-C6/SDIO — PASS (potwierdzone przez użytkownika 2026-11-06)
 - [x] Wykrywanie sieci Wi-Fi na rzeczywistym Tab5 — PASS (potwierdzone przez użytkownika 2026-11-06)
-- [ ] Połączenie z wybraną siecią 2,4 GHz, IP/DHCP, test dostępności API
-- [ ] Konfiguracja sieci bez haseł w repozytorium
+- [x] Kod v0.3: wybór SSID, klawiatura dotykowa, próba połączenia i wyświetlenie IP/RSSI (test sprzętowy PENDING)
+- [ ] Połączenie z wybraną siecią 2,4 GHz i potwierdzenie adresu IP na rzeczywistym Tab5
+- [ ] Automatyczne ponowne połączenie po restarcie, usunięcie danych sieci
+- [ ] Test dostępności API AI Platform po Wi-Fi
+- [x] Kod konfiguracji sieci bez haseł w repozytorium, zapis dopiero po udanym połączeniu (test sprzętowy PENDING)
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
