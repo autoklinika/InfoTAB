@@ -25,6 +25,14 @@ try {
     Write-Host '[InfoTAB] Building ESP32-P4 firmware (no upload)...'
     & $pio run -e infotab_tab5
     if ($LASTEXITCODE -ne 0) { throw "InfoTAB Build failed (exit code $LASTEXITCODE)" }
+    $firmware = Join-Path $project '.pio\build\infotab_tab5\firmware.bin'
+    if (-not (Test-Path -LiteralPath $firmware)) { throw 'Compiled firmware.bin not found.' }
+    $binarySize = (Get-Item -LiteralPath $firmware).Length
+    $slotLimit = 1310720
+    if ($binarySize -gt $slotLimit) {
+        throw "Firmware $binarySize B exceeds the current 1280KiB OTA slot. No upload."
+    }
+    Write-Host "[InfoTAB] Firmware size: $binarySize B / $slotLimit B (current OTA slot)"
     Write-Host '[InfoTAB] BUILD SUCCESS. Upload was NOT executed.'
 }
 finally {
