@@ -4,7 +4,7 @@ Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
 
 ## Status
 
-v0.1: pierwsza kompilacja i uruchomienie przez COM6 potwierdzone na Windows 11. v0.2: diagnostyka dotyku i skanowania Wi-Fi przygotowana na gałęzi roboczej `feature/initial-platformio-tab5`; test sprzętowy v0.2 jeszcze niepotwierdzony.
+v0.1: pierwsza kompilacja i uruchomienie przez COM6 potwierdzone na Windows 11. **Po czarnym ekranie przy próbie v0.2 przywrócono dokładny działający firmware v0.1 na gałęzi roboczej.** Testy dotyku i Wi-Fi będą osobnymi etapami.
 
 **Zasada:** gałąź `main` pozostaje stabilna; zmiany z gałęzi roboczych są scalane wyłącznie po zatwierdzeniu.
 
@@ -19,7 +19,7 @@ v0.1: pierwsza kompilacja i uruchomienie przez COM6 potwierdzone na Windows 11. 
 
 Przejdź na gałąź `feature/initial-platformio-tab5` i przeczytaj `docs/WINDOWS11.md`.
 
-## Test v0.2 (Windows 11)
+## Odzyskiwanie firmware v0.1 (Windows 11)
 
 W folderze repozytorium na gałęzi roboczej:
 
@@ -34,8 +34,7 @@ Jeżeli Build kończy się `SUCCESS`, wgraj przez USB-C / COM6:
 & "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e infotab_tab5 -t upload
 ```
 
-Na ekranie dotknij powierzchni, aby sprawdzić X/Y, a następnie przycisku `SKANUJ WI-FI`.
-To tylko skanowanie sieci — urządzenie **nie łączy się** i nie wymaga hasła.
+Na ekranie powinien ponownie pojawić się napis `InfoTAB` oraz linia `USB firmware: uruchomiony`. Jest to powrót do działającego obrazu v0.1; dotyk i Wi-Fi nie są jeszcze uruchamiane.
 
 Logowanie przez COM6, 115200 bps (zamknij inne aplikacje zajmujące port):
 
