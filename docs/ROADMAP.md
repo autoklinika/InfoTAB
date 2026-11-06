@@ -28,6 +28,20 @@
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
+## InfoTAB v0.9 — modułowe HMI bez górnego paska
+
+- [x] Zamiast topbara pełne wykorzystanie przestrzeni roboczej modułów.
+- [x] Dolne strony i gesty w kolejności: AI PLATFORM → NAS → UPS → USTAWIENIA.
+- [x] AI Platform: rzeczywiste /health — AI Bridge, baza, wersja i stan kontroli Ollama.
+- [x] NAS: tylko dostępność portów TCP 443/8080, bez fikcyjnych statystyk dysków i backupów.
+- [x] UPS: osiem kafelków Modbus, bez zmiany protokołu i źródła danych.
+- [x] Ustawienia: Wi-Fi, OTA, wersja i diagnostyka.
+- [x] Wymieniono także legacy topbar w podstronach konfiguracji/OTA.
+- [x] Zabezpieczono źródła v0.8 w `stable/v0.8-hmi-pass`.
+- [ ] Build Windows v0.9 i upload OTA: PENDING.
+- [ ] Test czterech ekranów, swipe, odczytów i braku migania na Tab5: PENDING.
+- [ ] Rozszerzona integracja API QNAP (SMART, pojemność, backup): odrębny etap.
+
 ## InfoTAB v0.8 — GUI i OTA
 
 - [x] Projekt: ekran UPS w układzie 4×2 — osiem niezależnych kafelków.
