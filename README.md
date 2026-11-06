@@ -1,3 +1,26 @@
+## Poprawka 2026-11-06: PowerShell ParserError w OTA
+
+Wcześniejszy `scripts/upload-wifi-windows.ps1` był uszkodzony:
+niedomknięty warunek (okolice linii 38) i zdublowany fragment po `finally`.
+Plik został zastąpiony jedną kompletną wersją. Ponadto GitHub Actions
+uruchamia teraz test składni `scripts/check-powershell-syntax.ps1`.
+
+Po pobraniu z GitHub, **przed aktualizacją urządzenia**:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-powershell-syntax.ps1
+```
+
+Dopiero po `POWERSHELL SYNTAX PASS (all scripts)`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1
+```
+
+Jeśli brakuje reguły TCP 3233, najpierw wykonać
+`scripts/setup-ota-firewall-windows.ps1` (UAC). Nie wyłączać zapory.
+
 # InfoTAB
 
 Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
