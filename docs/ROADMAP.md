@@ -43,7 +43,9 @@
 - [x] Potwierdzono lokalnie dwa sloty OTA po 6400 KiB, firmware 932416 B, wolne 5621184 B w każdym (2026-11-06)
 - [x] Fizyczna pamięć Flash potwierdzona przez COM6: 16 MB, ESP32-P4 rev. 1.3; `esptool flash-id` READ ONLY PASS (2026-11-06)
 - [x] Dodano skrypt backupu pełnych 16 MiB do prywatnego katalogu Windows + walidację rozmiaru, SHA-256 i starego layoutu (test na sprzęcie PENDING)
-- [ ] Potwierdzić lokalny backup urządzenia i wynik `BACKUP VERIFIED - READ ONLY PASS` — **plik zawiera potencjalne hasło Wi-Fi, nie udostępniać**
+- [x] Potwierdzono pełny, lokalny backup 16 MiB: `BACKUP VERIFIED - READ ONLY PASS`, SHA-256, stary układ partycji (2026-11-06). Kopia prywatna, nie publikować.
+- [x] Przygotowano lokalny read-only audyt nakładania starych partycji na nowe oraz odczyt eFuse/ROM security; test Windows PENDING
+- [ ] Potwierdzić stan Secure Boot / Flash Encryption i ocenę danych w starych partycjach przed migracją
 - [ ] Sprawdzić stan bootloadera i przygotować plan bezpiecznej migracji USB bez pełnego kasowania Flash
 - [ ] Plan migracji partycji do pełnej przestrzeni 16 MB: backup/odzyskanie NVS, USB recovery, test rollback
 - [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
