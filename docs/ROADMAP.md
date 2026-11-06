@@ -23,7 +23,7 @@
 - [x] Automatyczne ponowne połączenie po restarcie — PASS (potwierdzone przez użytkownika 2026-11-06)
 - [ ] Usunięcie danych sieci (funkcja dostępna, test sprzętowy PENDING)
 - [x] Endpoint AI Bridge `/health` z hosta 192.168.1.100:8080 odpowiada HTTP 200 (test na Minisforum)
-- [ ] Test dostępności API AI Platform `/health` bezpośrednio z Tab5 po Wi-Fi
+- [x] Test dostępności AI Bridge `/health` bezpośrednio z Tab5 po Wi-Fi: HTTP 200 (zdjęcie użytkownika, 2026-11-06)
 - [x] Kod konfiguracji sieci bez haseł w repozytorium; trwałość zapisu potwierdzona testem restartu 2026-11-06
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
@@ -34,9 +34,12 @@
 - [ ] Interfejs lokalny UPS, znaczniki czasu, rozłączenia
 
 ## Etap 4: OTA
-- [x] Weryfikacja domyślnej tabeli partycji dla ESP32-P4 / Arduino 3.2.1: NVS + otadata + app0/app1 po 0x640000 (6.25 MiB), bez konieczności zmiany partycji
-- [x] Dodany na ekranie odczyt aktywnej i zapasowej partycji OTA, bez zmian Flash (v0.4-preflight; test sprzętowy PENDING)
-- [ ] Potwierdzenie rozmiaru obrazu .bin i odczytu aktywnej partycji OTA z urządzenia
+- [x] Ustalono konflikt: board manifest sugeruje `default_16MB.csv` (app0/app1 po 6,25 MiB), ale **urządzenie faktycznie używa** app0/app1 po **1280 KiB** (`default.csv` / layout 4 MB). OTA BLOCKED do rozwiązania.
+- [x] Diagnostyka v0.4 na sprzęcie PASS: app0 0x10000/1280 KiB, app1 0x150000/1280 KiB, boot=running, Wi-Fi online, AI Bridge HTTP 200 (zdjęcia 2026-11-06)
+- [x] Dodano read-only skrypt `scripts/audit-partitions.py` do inspekcji wygenerowanego `partitions.bin` (lokalne uruchomienie PENDING)
+- [x] Rozmiar działającego obrazu odczytany z urządzenia: 932384 B (zdjęcia 2026-11-06)
+- [ ] Lokalny audyt `partitions.bin` wygenerowanego przez PlatformIO i porównanie z urządzeniem
+- [ ] Plan migracji partycji do pełnej przestrzeni 16 MB: backup/odzyskanie NVS, USB recovery, test rollback
 - [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
 - [ ] Potwierdzony rollback / recovery przez USB
 - [ ] Wydania firmware i opcjonalna CI w GitHub Actions
