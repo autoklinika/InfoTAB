@@ -1,5 +1,29 @@
 # InfoTAB
 
+## InfoTAB v0.9 — AI PLATFORM / NAS / UPS / USTAWIENIA
+
+**Nowy układ HMI:** bez topbara, cztery ekrany przełączane gestami
+lewo/prawo lub dolnymi zakładkami. Dane AI Platform pochodzą z
+`http://192.168.1.100:8080/health`; NAS pokazuje dostępność usług
+na `192.168.1.101`; UPS zachowuje wyłącznie Modbus TCP
+`192.168.1.102:502`; Ustawienia gromadzą Wi-Fi, OTA i diagnostykę.
+Żadnych udawanych danych SMART, backupów czy modeli AI.
+
+**Wgraj na działające v0.8 przez OTA bez hasła:**
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-powershell-syntax.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-no-password-windows.ps1
+```
+
+Po kompilacji aktywuj na InfoTAB `USTAWIENIA → OTA WIFI → AKTYWUJ OTA`
+i potwierdź w terminalu. Test kompilacji i urządzenia **PENDING**.
+[Dokumentacja ekranów v0.9](docs/HMI_V09.md).
+Zachowany kod v0.8: `stable/v0.8-hmi-pass`.
+
+---
+
 ## InfoTAB v0.8 — jaśniejsze HMI i kafelki UPS
 
 - Jaśniejsza grafitowo-niebieska kolorystyka na wszystkich ekranach.
