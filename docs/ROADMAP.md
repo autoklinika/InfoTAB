@@ -8,13 +8,14 @@
 - [ ] Potwierdzenie logów portu szeregowego (115200 bps)
 - [ ] Potwierdzona rewizja sterownika ekranu na urządzeniu
 
-## Etap 1: ekran i HMI
-- [ ] Test dotyku i orientacji
+## Etap 1: ekran i HMI (diagnostyka v0.2 przygotowana)
+- [x] Kod testu dotyku i orientacji dodany w v0.2 (test na sprzęcie: PENDING)
 - [ ] Projekt graficzny ekranu InfoTAB
 - [ ] Obsługa błędów, watchdog, komunikaty stanu
 
 ## Etap 2: sieć
-- [ ] Łączność Wi-Fi przez koprocesor ESP32-C6
+- [x] Kod skanowania sieci Wi-Fi przez ESP32-C6/SDIO dodany w v0.2 (test na sprzęcie: PENDING)
+- [ ] Potwierdzenie widoczności sieci 2,4 GHz na rzeczywistym Tab5
 - [ ] Konfiguracja sieci bez haseł w repozytorium
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
