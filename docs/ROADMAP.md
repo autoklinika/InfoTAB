@@ -37,9 +37,9 @@
 - [x] Dodano nowe rozmieszczenie kart, statusów i przycisków.
 - [x] Dodano ręczny 5-minutowy odbiornik OTA z losowym hasłem na ekranie oraz uploader Windows.
 - [ ] Windows Build v0.6 i kontrola, czy binarka mieści się w 1280 KiB.
-- [ ] Uruchomienie Tab5 v0.6 przez USB-C, odczyt Modbus i brak migania: PASS.
+- [x] InfoTAB v0.6 uruchamia się na sprzęcie, odczytuje UPS przez Modbus i nie miga ekranem — PASS (potwierdzenie użytkownika 2026-11-06).
 - [x] Transfer OTA przez Wi-Fi: `WIFI OTA TRANSFER SUCCESS` (potwierdzenie użytkownika 2026-11-06). Autoryzacja/połączenie TCP i przesłanie obrazu zakończone sukcesem.
-- [ ] Potwierdzić boot nowego firmware po OTA, zachowanie Wi-Fi, odczyt Modbus oraz brak migania LCD.
+- [x] Po Wi-Fi OTA: poprawny boot, automatyczne Wi-Fi, rzeczywisty Modbus i brak migania LCD — 4/4 PASS (potwierdzenie użytkownika 2026-11-06).
 - [ ] Produkcyjne uwierzytelnianie/podpisy i rollback: późniejszy etap.
 
 ## Etap 3: telemetria UPS — główny priorytet
