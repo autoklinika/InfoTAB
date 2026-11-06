@@ -1,10 +1,11 @@
 # InfoTAB — plan wdrożenia
 
-## Etap 0: USB / obraz startowy (obecny)
+## Etap 0: USB / obraz startowy (pierwszy test zaliczony)
 - [x] Struktura projektu PlatformIO dla M5Stack Tab5
 - [x] Wskazanie COM6 na Windows 11
-- [ ] Zweryfikowana lokalnie kompilacja na Windows 11
-- [ ] Wgranie i potwierdzenie startu ekranu/portu szeregowego
+- [x] Zweryfikowana lokalnie kompilacja na Windows 11 (`BUILD SUCCESS`, potwierdzone przez użytkownika 2026-11-06)
+- [x] Pierwsze wgranie przez COM6 i uruchomienie InfoTAB na ekranie (potwierdzone przez użytkownika 2026-11-06)
+- [ ] Potwierdzenie logów portu szeregowego (115200 bps)
 - [ ] Potwierdzona rewizja sterownika ekranu na urządzeniu
 
 ## Etap 1: ekran i HMI
