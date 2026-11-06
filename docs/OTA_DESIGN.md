@@ -95,6 +95,48 @@ Jeśli Build nie przejdzie, **nie wykonywać Upload**.
 Obecne sloty OTA są małe; **nie uruchamiać OTA i nie modyfikować tabeli partycji**, dopóki nie zweryfikujemy lokalnego obrazu partycji oraz metody ochrony NVS.
 Nie podawać w logach haseł sieci ani prywatnych tokenów.
 
+## Audyt 16 MB — odrębny wariant kompilacji (PENDING)
+
+Audyt lokalnej tabeli potwierdzony przez użytkownika 2026-11-06:
+
+- `nvs`: 0x9000 / 0x5000 (20 KiB)
+- `otadata`: 0xE000 / 0x2000 (8 KiB)
+- `app0`: 0x10000 / 0x140000 (1280 KiB)
+- `app1`: 0x150000 / 0x140000 (1280 KiB)
+- `firmware.bin`: 932384 B, wolne 378336 B w każdym slocie
+
+Wniosek: **zarówno firmware na urządzeniu, jak i lokalny build używają
+4 MB `default.csv`**. Board manifest z `default_16MB.csv` nie
+wymusił większej tabeli w użytym środowisku PlatformIO.
+
+Przygotowano osobny, NIEdomyślny wariant kompilacji:
+`[env:infotab_tab5_16mb_audit]`, który dziedziczy istniejącą konfigurację
+i jawnie wskazuje `partitions/infotab_16mb.csv`.
+Główny `[env:infotab_tab5]` pozostaje bez zmian.
+
+Dwie partycje w nowym wariancie mają po 0x640000 B (6,25 MiB).
+NVS zachowuje ten sam offset i rozmiar co dotychczas, ale **nie uznajemy
+tego za gwarancję zachowania danych podczas migracji**.
+
+Na Windows 11, wewnątrz folderu repo:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-16mb-audit-windows.ps1
+```
+
+Skrypt kompiluje tylko kandydata i analizuje `partitions.bin`, bez
+podłączania do Tab5, zapisu Flash ani wykonywania Upload.
+Oczekiwany komunikat:
+`16MB BUILD + AUDIT PASS. USB UPLOAD WAS NOT EXECUTED.`
+
+**Przed migracją:** zarchiwizować lokalnie binarną kopię NVS
+(SSID/hasło — traktować jako sekret), przeanalizować aktualny `otadata`,
+sprawdzić faktyczną pojemność Flash, zapisać plan powrotu przez USB-C,
+oraz wyznaczyć procedurę flashowania tabeli + app0 bez `erase_flash`.
+Nie kopiować prywatnego NVS na GitHub ani AI Platform.
+Weryfikacja kandydata nie upoważnia do flashowania.
+
 ## Architektura docelowa (propozycja)
 
 - Punkt udostępniający firmware: serwer lokalny AI Platform (`192.168.1.100`);
