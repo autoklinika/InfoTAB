@@ -137,6 +137,41 @@ oraz wyznaczyć procedurę flashowania tabeli + app0 bez `erase_flash`.
 Nie kopiować prywatnego NVS na GitHub ani AI Platform.
 Weryfikacja kandydata nie upoważnia do flashowania.
 
+## Wynik kandydata 16 MB i następny krok (2026-11-06)
+
+Użytkownik potwierdził na Windows 11:
+
+- `infotab_tab5_16mb_audit`: **BUILD SUCCESS** (2:03).
+- `partitions.bin`: NVS 0x9000/0x5000, otadata 0xE000/0x2000,
+  app0 0x10000/0x640000, app1 0x650000/0x640000,
+  SPIFFS 0xC90000/0x360000, coredump 0xFF0000/0x10000.
+- `firmware.bin`: 932416 B.
+- Oba sloty: **6400 KiB**, po **5621184 B** wolnego.
+- Skrypt zakończył się `16MB BUILD + AUDIT PASS. USB UPLOAD WAS NOT EXECUTED.`
+
+To potwierdza **lokalny build**, nie rzeczywistą pojemność układu Flash
+ani zachowanie danych po zmianie tabeli partycji na urządzeniu.
+
+### Fizyczna identyfikacja pamięci (TYLKO ODCZYT)
+
+Przy podłączonym Tab5 przez USB-C, po zamknięciu Serial Monitor,
+w Windows PowerShell:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\probe-flash-windows.ps1
+```
+
+Narzędzie wywołuje wyłącznie komendę `esptool flash-id` z obsługą
+`--chip esp32p4` i portu COM6. Nie wykonuje `erase-flash`,
+`write-flash`, `read-flash` ani operacji na NVS. Może być konieczny
+tryb programowania, a po pomiarze krótkie naciśnięcie bocznego przycisku
+do ponownego włączenia.
+
+Następnie przygotować **lokalną, chronioną kopię** działającego obrazu
+i NVS/otadata/tabeli przed migracją. NVS zawiera hasło Wi-Fi: nie publikować
+go ani w repo, ani w komunikatorze, nie dołączać surowego pliku do rozmowy.
+
 ## Architektura docelowa (propozycja)
 
 - Punkt udostępniający firmware: serwer lokalny AI Platform (`192.168.1.100`);
