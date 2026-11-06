@@ -74,6 +74,8 @@ struct UpsData {
     int inputVoltTenths = -1;
     int outputVoltTenths = -1;
     int outputHzTenths = -1;
+    int batteryVoltTenths = -1;
+    int32_t powerWattsEstimate = -1;
     long runtimeSeconds = -1;
     uint32_t updatedAt = 0;
 };
@@ -148,6 +150,8 @@ void pollUpsReadOnly() {
     snapshot.inputVoltTenths = m.inputVolts10;
     snapshot.outputVoltTenths = m.outputVolts10;
     snapshot.outputHzTenths = m.outputHertz10;
+    snapshot.batteryVoltTenths = m.batteryVolts10;
+    snapshot.powerWattsEstimate = m.outputActiveWattsEstimate;
     snapshot.runtimeSeconds = m.runtimeSeconds;
     snapshot.updatedAt = millis();
     ups = snapshot;
@@ -174,14 +178,14 @@ void pollAiBridge() {
 // Dynamic values refresh in small rectangles; NO fillScreen() on any timer.
 // InfoTAB v0.7: restrained industrial HMI, 4 horizontal swipe pages.
 // Only page changes clear the whole LCD. Telemetry changes repaint values.
-static constexpr uint16_t UI_BG = 0x0842;    // charcoal
-static constexpr uint16_t UI_CARD = 0x10C3;  // raised graphite
-static constexpr uint16_t UI_BORDER = 0x2945;
-static constexpr uint16_t UI_WHITE = 0xE71C;
-static constexpr uint16_t UI_MUTED = 0x8C71;
-static constexpr uint16_t UI_ACCENT = 0x65D1; // muted teal
-static constexpr uint16_t UI_GOOD = 0x7E2E;
-static constexpr uint16_t UI_WARNING = 0xED08;
+static constexpr uint16_t UI_BG = 0x2945;    // brighter charcoal
+static constexpr uint16_t UI_CARD = 0x4228;  // medium graphite
+static constexpr uint16_t UI_BORDER = 0x6B4D;
+static constexpr uint16_t UI_WHITE = 0xFFFF;
+static constexpr uint16_t UI_MUTED = 0xD69A;
+static constexpr uint16_t UI_ACCENT = 0x7E38; // muted teal
+static constexpr uint16_t UI_GOOD = 0xA7D2;
+static constexpr uint16_t UI_WARNING = 0xF5CD;
 
 bool mainPage(Page p) {
     return p == Page::Dashboard || p == Page::Power ||
@@ -299,44 +303,47 @@ void drawOverview() {
     uiText(42, 570, "Modbus TCP  /  192.168.1.102:502", UI_MUTED, 2, UI_BG);
     drawOverviewValues();
 }
+// Eight aligned tiles; each live measurement has its own light graphite card.
+void powerTile(int col, int row, const String& label, const String& note) {
+    const int x = 32 + col * 308, y = 111 + row * 251;
+    panel(x, y, 292, 233);
+    uiText(x + 22, y + 21, label, UI_MUTED, 2);
+    M5.Display.drawFastHLine(x + 22, y + 176, 247, UI_BORDER);
+    uiText(x + 22, y + 187, note, UI_MUTED, 1);
+}
+void tilePowerValue(int col, int row, const String& value,
+                    uint16_t color = UI_WHITE, int scale = 3) {
+    const int x = 54 + col * 308, y = 201 + row * 251;
+    valueAt(x, y, 247, 75, value, color, scale);
+}
 void drawPowerValues() {
-    valueAt(63, 208, 504, 64, ups.valid ?
-            String(ups.inputVoltTenths / 10.0f, 1) + " V" : "--",
-            UI_WHITE, 4);
-    valueAt(670, 208, 506, 64, ups.valid ?
-            String(ups.outputVoltTenths / 10.0f, 1) + " V" : "--",
-            UI_WHITE, 4);
-    valueAt(63, 435, 170, 51, ups.valid ?
-            String(ups.batteryPct) + "%" : "--", UI_GOOD, 3);
-    valueAt(670, 435, 185, 51, ups.valid ?
-            String(ups.loadPct) + "%" : "--", UI_WHITE, 3);
-    M5.Display.fillRect(63, 501, 499, 12, UI_CARD);
-    M5.Display.fillRect(670, 501, 500, 12, UI_CARD);
-    progressBar(63, 501, 499, ups.valid ? ups.batteryPct : -1, UI_GOOD);
-    progressBar(670, 501, 499, ups.valid ? ups.loadPct : -1, UI_ACCENT);
-    valueAt(63, 553, 510, 32,
-            ups.valid ? String("Rezerwa: ") + String(ups.runtimeSeconds / 60) +
-            " min (szacunek UPS)" : "Brak pomiaru", UI_MUTED, 2, UI_BG);
-    valueAt(670, 553, 495, 32,
-            ups.valid ? String("Wyjscie: ") +
-            String(ups.outputHzTenths / 10.0f, 1) + " Hz" : "Brak pomiaru",
-            UI_MUTED, 2, UI_BG);
+    tilePowerValue(0, 0, ups.valid ? String(ups.inputVoltTenths / 10.0f, 1) + " V" : "--");
+    tilePowerValue(1, 0, ups.valid ? String(ups.outputVoltTenths / 10.0f, 1) + " V" : "--");
+    tilePowerValue(2, 0, ups.valid ? String(ups.outputHzTenths / 10.0f, 1) + " Hz" : "--");
+    tilePowerValue(3, 0, ups.valid && ups.powerWattsEstimate >= 0 ?
+                   String("~") + String(ups.powerWattsEstimate) + " W" : "--",
+                   UI_WHITE, 3);
+    tilePowerValue(0, 1, ups.valid ? String(ups.batteryPct) + "%" : "--",
+                   ups.valid ? UI_GOOD : UI_WARNING, 4);
+    tilePowerValue(1, 1, ups.valid ? String(ups.loadPct) + "%" : "--", UI_WHITE, 4);
+    tilePowerValue(2, 1, ups.valid ? String(ups.runtimeSeconds / 60) + " min" : "--",
+                   UI_WHITE, 3);
+    tilePowerValue(3, 1, ups.valid && ups.batteryVoltTenths > 0 ?
+                   String(ups.batteryVoltTenths / 10.0f, 1) + " V" : "--");
 }
 void drawPower() {
     tabShell("PARAMETRY UPS", 1);
-    panel(32, 111, 576, 234);
-    panel(639, 111, 609, 234);
-    uiText(63, 147, "NAPIECIE WEJSCIOWE", UI_MUTED);
-    uiText(670, 147, "NAPIECIE WYJSCIOWE", UI_MUTED);
-    rule(63, 303, 501); rule(670, 303, 529);
-    uiText(63, 311, "Modbus 132  /  V", UI_MUTED);
-    uiText(670, 311, "Modbus 147  /  V", UI_MUTED);
-    panel(32, 364, 576, 176);
-    panel(639, 364, 609, 176);
-    uiText(63, 389, "BATERIA", UI_MUTED);
-    uiText(670, 389, "OBCIAZENIE UPS", UI_MUTED);
+    powerTile(0, 0, "WEJSCIE", "Nap. wejsciowe");
+    powerTile(1, 0, "WYJSCIE", "Nap. wyjsciowe");
+    powerTile(2, 0, "CZESTOTLIWOSC", "Czestotliwosc wyj.");
+    powerTile(3, 0, "MOC WYJ. *", "Orientacyjna, reg156");
+    powerTile(0, 1, "BATERIA", "Stopien naladowania");
+    powerTile(1, 1, "OBCIAZENIE", "Wzgledem mocy znam.");
+    powerTile(2, 1, "CZAS UPS", "Szacowany czas");
+    powerTile(3, 1, "NAPIECIE BATERII", "Napiecie akum.");
     drawPowerValues();
 }
+
 void drawNetworkValues() {
     valueAt(63, 209, 519, 61, connectionStatus(),
             connected() ? UI_GOOD : UI_WARNING, 3);
