@@ -121,6 +121,9 @@ bool connected() {
 }
 
 
+// Forward declaration: dashboard navigation uses render() below.
+void render();
+
 bool readNutVar(NetworkClient& client, const char* variable, String& result) {
     const String prefix = String("VAR ") + UPS_NAME + " " + variable + " ";
     client.print(String("GET VAR ") + UPS_NAME + " " + variable + "\n");
