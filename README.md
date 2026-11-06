@@ -123,3 +123,20 @@ ani publicznej chmury.** Stosuj szyfrowanie dysku Windows (BitLocker).
 Pełna instrukcja: [docs/FLASH_BACKUP.md](docs/FLASH_BACKUP.md).
 
 Do czasu zatwierdzenia backupu: **nie wgrywamy wariantu 16 MB i nie włączamy OTA**.
+
+## Migracja OTA — preflight bez zapisu do Flash
+
+Pełny backup 16 MiB zakończony `BACKUP VERIFIED - READ ONLY PASS` (2026-11-06).
+Fizyczna pojemność Flash 16 MB i kandydacki build po 6,25 MiB: PASS.
+
+Teraz sprawdź stan zabezpieczeń chipu i nakładanie dawnych partycji na
+nowy layout, korzystając wyłącznie z prywatnej kopii lokalnej:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\preflight-migration-windows.ps1
+```
+
+Skrypt nie czyta haseł Wi-Fi w postaci tekstowej i nie zapisuje Flash.
+Prześlij jedynie wynik tekstowy preflight, nigdy kopię 16 MiB.
+Migracja USB i OTA pozostają ZABLOKOWANE do przejrzenia wyników.
