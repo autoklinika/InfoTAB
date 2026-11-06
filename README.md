@@ -23,6 +23,28 @@ Jeśli brakuje reguły TCP 3233, najpierw wykonać
 
 # InfoTAB
 
+## InfoTAB v0.7 — HMI z gestami
+
+Nowy interfejs: cztery ekrany **START / UPS / SIEC-AI / SERWIS**,
+gest lewo/prawo, dolna nawigacja i odświeżanie samych wartości
+pomiarowych. Zachowane: działający Modbus TCP, konfiguracja Wi-Fi,
+AI Bridge i OTA.
+
+**Instalacja przez Wi-Fi** (jednorazowy kod aktywuj na Tab5 dopiero
+gdy uploader poprosi o hasło):
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-powershell-syntax.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1
+```
+
+Nowe HMI jest **przygotowane do przeglądu na urządzeniu**;
+kompilacja i test sprzętowy v0.7 są jeszcze niepotwierdzone.
+Instrukcja oraz lista testów: [docs/HMI_V07.md](docs/HMI_V07.md).
+Powrót do znanego źródła v0.6: gałąź `stable/v0.6-hardware-pass`.
+
+
 Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
 
 ## Naprawa: OTA "No response from device" na Windows 11
