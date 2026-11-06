@@ -1,6 +1,6 @@
 # InfoTAB — projekt bezpiecznej aktualizacji OTA
 
-Status: **v0.4-preflight — kod diagnostyczny przygotowany**, kompilacja i uruchomienie na sprzęcie: PENDING. Bez mechanizmu aktualizacji OTA. Działający firmware v0.3 na Tab5 pozostaje bez zmian do następnego wgrania przez USB.
+Status: **v0.4-preflight — test sprzętowy PASS dla odczytu partycji i HTTP 200**. Bez mechanizmu aktualizacji OTA. **STOP dla pierwszej aktualizacji OTA** do rozstrzygnięcia rozbieżności w tabeli partycji.
 Data: 2026-11-06.
 
 ## Stan potwierdzony na sprzęcie
@@ -9,7 +9,11 @@ Data: 2026-11-06.
 - Ekran i dotyk działają
 - Konfiguracja Wi-Fi na ekranie, zapis NVS i reconnect po restarcie: **PASS**
 - Odczytany lokalny adres IP z DHCP: **192.168.1.38**
-- Wprowadzenie OTA: **PENDING**
+- v0.4-preflight: odczyt na urządzeniu i komunikacja z AI Bridge **PASS** (zdjęcia 2026-11-06)
+- Bieżący firmware: 932384 B, aktywna `app0` offset 0x10000/1280 KiB,
+  następny slot `app1` offset 0x150000/1280 KiB.
+- Zgodność boot/running: PASS. Rollback: NIEPRZETESTOWANY.
+- Wprowadzenie zapisu OTA: **BLOCKED — wymagany audyt rzeczywistej tabeli partycji**.
 
 ## Już istniejące partycje OTA (nie zmieniamy pochopnie tabeli)
 
@@ -28,11 +32,24 @@ Oficjalna tabela `tools/partitions/default_16MB.csv` w Arduino ESP32 3.2.1:
 | spiffs | 0xC90000 | 0x360000 |
 | coredump | 0xFF0000 | 0x10000 |
 
-Oznacza to, że *źródłowa* konfiguracja przewiduje A/B OTA,
-bez potrzeby zmiany tabeli przed pierwszym testem.
-Trzeba potwierdzić rzeczywisty aktywny slot i rozmiar binarki
-na docelowym urządzeniu — sama deklaracja w repo nie gwarantuje
-zachowania działającego bootloadera po innych wcześniejszych flashach.
+**UWAGA: dane z urządzenia przeczą temu domyślnemu ustawieniu.**
+Na zdjęciu diagnostyki v0.4 z 2026-11-06 widać **faktyczną, uruchomioną**
+tabelę: `app0 0x10000 0x140000` i `app1 0x150000 0x140000`,
+czyli **dwa sloty po 1280 KiB (1,25 MiB)**. Odpowiada to layoutowi
+Arduino `default.csv` dla 4 MiB Flash, a NIE layoutowi `default_16MB.csv`.
+Różnica jest istotna: 16 MB na układzie nie gwarantuje 16 MB
+w poprawnie skonfigurowanej tabeli.
+
+**Nie zmieniamy automatycznie `board_build.partitions` i nie wykonujemy
+nowego USB Upload w celu przebudowy tabeli.** Najpierw porównujemy
+wygenerowany lokalnie `.pio/build/infotab_tab5/partitions.bin`
+za pomocą narzędzia `scripts/audit-partitions.py` (TYLKO ODCZYT),
+a dopiero później podejmujemy decyzję o migracji, backupie NVS
+i bezpiecznym reprovisioningu przez USB-C.
+
+Rozmiar 932384 B pozostawia ok. 369 KiB zapasu w każdym slocie,
+co dla planowanego interfejsu i integracji UPS jest ograniczeniem rozwojowym.
+Nie traktujemy samego faktu, że A/B istnieje, jako zgody na OTA.
 
 Źródła:
 - https://github.com/pioarduino/platform-espressif32/blob/54.03.21/boards/esp32-p4-evboard.json
@@ -61,12 +78,21 @@ serwis OTA z kontrolą dostępu — nie rozszerzać bez potrzeby AI Bridge.
 1. `git pull --ff-only`, następnie lokalny `scripts/build-windows.ps1`.
 2. Po `BUILD SUCCESS` wgrać przez USB-C/COM6.
 3. Po uruchomieniu sprawdzić autołączenie z zapamiętaną siecią.
-4. Otworzyć `OTA DIAG (ODCZYT)`; przepisać nazwy i rozmiary aktywnego i zapasowego slotu.
-5. Nacisnąć `TEST AI BRIDGE`, oczekiwane: `AI BRIDGE: HTTP 200 (ONLINE)`.
+4. Otworzyć `OTA DIAG (ODCZYT)` — **PASS: app0/app1 po 1280 KiB**.
+5. Nacisnąć `TEST AI BRIDGE` — **PASS: HTTP 200 (ONLINE)**.
 6. Wcisnąć `WROC`, potwierdzić działanie konfiguracji Wi-Fi.
+7. Na komputerze Windows 11 wykonać po Build odczyt lokalnej tabeli:
+
+```powershell
+& "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" .\scripts\audit-partitions.py
+```
+
+Wynik porównać ze zdjęciem. Jeśli lokalny layout ma 6,25 MiB,
+a urządzenie 1,25 MiB, nie wgrywać kolejnego firmware bez planu
+migracji i zabezpieczenia NVS.
 
 Jeśli Build nie przejdzie, **nie wykonywać Upload**.
-Jeśli OTA slot jest niedostępny lub za mały, bez diagnozy nie instalować nowych obrazów.
+Obecne sloty OTA są małe; **nie uruchamiać OTA i nie modyfikować tabeli partycji**, dopóki nie zweryfikujemy lokalnego obrazu partycji oraz metody ochrony NVS.
 Nie podawać w logach haseł sieci ani prywatnych tokenów.
 
 ## Architektura docelowa (propozycja)
@@ -92,12 +118,14 @@ Nie podawać w logach haseł sieci ani prywatnych tokenów.
 1. Rezerwacja DHCP w UniFi dla urządzenia, sugerowany aktualny IP 192.168.1.38.
    Adres jest informacją lokalną i nie powinien być zakodowany na stałe
    w firmware OTA (preferować konfigurację lub DNS).
-2. Odczyt `ESP.getSketchSize()`, partycji uruchomionej i następnego slotu
-   na docelowym Tab5 (test read-only).
+2. Odczyt `ESP.getSketchSize()`, partycji uruchomionej i następnego slotu na Tab5: **PASS** (932384 B, app0/app1 po 1280 KiB).
+   Dodatkowo wymagana jest weryfikacja lokalnego `partitions.bin` przez skrypt audytowy.
 3. Przegląd endpointu serwującego firmware z AI Platform i polityki auth/TLS.
 4. Zdefiniowanie podpisu firmware, wersjonowania i testu odmowy
    nieautoryzowanej aktualizacji.
 5. Ścieżka odtworzenia aktualnego v0.3 przez USB-C dostępna i przetestowana.
 
 **Uwaga:** na tym etapie nie instalujemy nowego bootloadera,
-nie nadpisujemy partycji i nie zmieniamy danych NVS.
+nie nadpisujemy partycji i nie zmieniamy danych NVS. Modyfikacja układu
+partycji wymaga osobnego planu migracji przez USB-C, z kopią konfiguracji
+Wi-Fi i sprawdzoną ścieżką odzyskania.
