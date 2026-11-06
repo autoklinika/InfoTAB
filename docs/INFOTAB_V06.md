@@ -1,0 +1,119 @@
+# InfoTAB v0.6 — pierwszy pulpit użytkowy + Modbus TCP + OTA
+
+Status: kod przygotowany na gałęzi roboczej; **Build na Windows 11 i test na sprzęcie PENDING**.
+
+## Co zmieniono
+
+1. Telemetria **wyłącznie przez Modbus TCP** z UPS `192.168.1.102:502`
+   (Unit ID 1, tylko function code 03 Read Holding Registers). **NUT nie
+   jest już używany przez aplikację InfoTAB**. Guardian zasilania na
+   Minisforum pozostaje bez zmian.
+2. Ekran główny z kartami: baterii, obciążenia %, szacowanego
+   czasu podtrzymania, napięcia wejścia i wyjścia, AI Bridge i Wi-Fi.
+3. Brak pełnego przeładowywania ekranu co 5 sekund. Statyczny pulpit jest
+   rysowany tylko przy wejściu do widoku, a odczyty odświeżają wyłącznie
+   pola wartości; ekran ustawień sieci nie odświeża się bez potrzeby.
+4. OTA Wi-Fi aktywowane **ręcznie przyciskiem `OTA WIFI` na InfoTAB**.
+   Losowe hasło (18 znaków) pokazywane tylko na urządzeniu, bez zapisu w
+   GitHub i NVS, nasłuch portu 3232 maksymalnie 5 minut.
+5. Poprzednia konfiguracja Wi-Fi i przycisk `OTA DIAG` pozostają.
+
+## Rejestry Modbus — potwierdzone na UPS
+
+Mapę skonfrontowano z projektem PowerWalker Modbus v0.1.0 (rejestry
+odtworzone z WinPower; inne modele mogą mieć inną mapę), a następnie
+odczytano rzeczywiste wartości z naszego UPS przez Minisforum.
+
+| Pole | Adres Modbus zero-based (FC03) | Skala | Wynik przykładowego odczytu 2026-11-06 |
+|---|---|---|---|
+| Kod trybu pracy | 112, dolny bajt | kod | 4 — normalna praca w aktualnym pomiarze |
+| Napięcie wejściowe | 132 | /10 V | 235,0 V |
+| Napięcie wyjściowe | 147 | /10 V | 230,0 V |
+| Częstotliwość wyjściowa | 144 | /10 Hz | 50,0 Hz |
+| Obciążenie wyjścia | 162 | % | 10% |
+| Czas minuty | 165 | min | 75 min |
+| Czas sekundy | 166 | s | 5 s |
+| Bateria | 169 | % | 93% |
+| Napięcie baterii | 170 | /10 V | 83,9 V |
+
+NUT służył wyłącznie do jednorazowej weryfikacji stanu online przy
+identyfikacji kodu trybu, nie jest źródłem danych pulpitu.
+
+**Moc czynna nie jest jeszcze prezentowana w watach.** Pole 156 zwraca
+wartość wymagającą sprawdzenia skali względem wyświetlacza UPS.
+Przed publikowaniem mocy [W] należy potwierdzić interpretację.
+
+Źródła mapy:
+- https://pypi.org/project/powerwalker-modbus/
+- https://powerwalker.com/pl/produkt/10122199/
+
+## Instalacja v0.6 — jednorazowo USB-C
+
+W Windows 11 / VS Code / repo InfoTAB:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
+```
+
+Po `BUILD SUCCESS` wgrać **domyślnym środowiskiem 4 MB**:
+
+```powershell
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e infotab_tab5 -t upload
+```
+
+To pojedyncza instalacja OTA do aktualnie działającej partycji.
+**NIE korzystać z `infotab_tab5_16mb_audit -t upload`**.
+Nie dokonujemy zmiany tabeli ani przenoszenia NVS.
+
+## Następne aktualizacje — bez kabla
+
+1. Skompiluj najnowszą wersję projektu, gdy jest gotowa.
+2. Na InfoTAB otwórz `OTA WIFI` → `AKTYWUJ OTA`.
+3. W VS Code (Windows PowerShell) wykonaj:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1
+```
+
+Skrypt buduje właściwe `infotab_tab5`, sprawdza limit
+**1 310 720 B** bieżącego slotu 1,25 MiB, pyta lokalnie o jednorazowe
+hasło widoczne na ekranie i wysyła firmware do `192.168.1.38:3232`.
+Urządzenie powinno automatycznie uruchomić nowy obraz.
+
+Jeżeli DHCP przydzieli inny IP, użyj:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1 -DeviceIp 192.168.1.38
+```
+
+i podmień IP na adres aktualnie wyświetlany na InfoTAB.
+
+## Ograniczenia OTA w tej fazie
+
+- Jest to lokalne **ArduinoOTA do zastosowań deweloperskich**:
+  uwierzytelnianie oparte na MD5 i jednorazowym haśle, nie podpis
+  kryptograficzny firmware. Używać w zaufanej, izolowanej sieci LAN.
+- Token wpisywany do lokalnego procesu `espota.py` może być krótkotrwale
+  widoczny dla administratorów systemu Windows przez inspekcję argumentów
+  procesów. Nie jest zapisywany w projekcie.
+- OTA nie jest uruchomione bez ręcznego aktywowania na urządzeniu.
+- Nie wdrożono jeszcze automatycznego rollbacku i podpisów cyfrowych.
+- Nie zmienia tabeli 4 MB; OTA działa tylko, gdy firmware mieści się
+  w istniejącej partycji 1280 KiB. Migracja 16 MB jest osobnym etapem.
+- Jeśli aktualizacja OTA się nie uda, nadal dostępny jest tryb USB-C
+  i prywatny backup pełnych 16 MB.
+
+## Test odbiorczy
+
+- [ ] Kompilacja Windows v0.6: BUILD SUCCESS.
+- [ ] Pulpit się uruchamia, brak pełnych błysków ekranu.
+- [ ] UPS pokazuje rzeczywiste pomiary Modbus oraz adres źródła .102.
+- [ ] Wi-Fi/AI Bridge pozostają dostępne.
+- [ ] `OTA WIFI` pokazuje jednorazowe hasło i wygasa po 5 minutach.
+- [ ] Pierwsza aktualizacja OTA po Wi-Fi: SUCCESS.
+- [ ] Po restarcie powracają UI i konfiguracja Wi-Fi.
+
+**Nie wolno traktować tych testów jako PASS, dopóki nie zostaną
+potwierdzone na prawdziwym urządzeniu.**
