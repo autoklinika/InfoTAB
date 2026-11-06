@@ -83,7 +83,7 @@ Nie zmienia globalnego Pythona w Windows i nie wgrywa firmware do urządzenia.
 
 Nie używamy override `tool-esptoolpy@5.0.2` z ZIP — w połączeniu z
 `platform-espressif32#54.03.21` powodował brak pliku `esptool.py`.
-Zostawiamy pakiet esptool wskazany przez platformę.
+Wymuszamy zgodny `tool-esptoolpy@5.0.0` w konfiguracji projektu.
 
 Po Build sprawdź `SUCCESS`; dopiero wtedy wykonamy Upload na COM6.
 
