@@ -635,12 +635,12 @@ void drawPassword() {
 
 // Diagnostic-only: these APIs inspect partition metadata; no flash writes.
 void drawOtaDiag() {
-    header("Diagnostyka OTA (TYLKO ODCZYT)");
+    header("DIAGNOSTYKA OTA");
     const esp_partition_t* running = esp_ota_get_running_partition();
     const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
     const esp_partition_t* boot = esp_ota_get_boot_partition();
     const uint32_t sketchBytes = ESP.getSketchSize();
-    writeText(45, 116, "Firmware InfoTAB: v0.8", TFT_CYAN, 2);
+    writeText(45, 116, "Firmware InfoTAB: v0.9", TFT_CYAN, 2);
     writeText(45, 160, "Obraz programu: " + String(sketchBytes) + " B", TFT_WHITE, 2);
     if (running) {
         writeText(45, 218, "Aktywna: " + String(running->label), TFT_GREEN, 2);
