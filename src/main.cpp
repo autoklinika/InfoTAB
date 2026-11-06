@@ -4,10 +4,12 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <NetworkClient.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
 
-// InfoTAB v0.4 preflight: Wi-Fi setup + read-only OTA diagnostic screen.
+// InfoTAB v0.5: working UPS dashboard (NUT read-only) + AI Platform status,
+// with existing touchscreen Wi-Fi setup and read-only OTA diagnostics.
 // Credentials are NEVER embedded in source, printed on Serial, or sent to GitHub.
 // The ESP32-P4 uses the ESP32-C6 Wi-Fi companion via M5Stack's SDIO pin mapping.
 
@@ -28,9 +30,13 @@ constexpr int KEY_HEIGHT = 51;
 constexpr int KEY_FIRST_Y = 313;
 constexpr uint32_t CONNECT_TIMEOUT_MS = 20000;
 constexpr uint32_t HOME_REFRESH_MS = 5000;
+constexpr const char* UPS_HOST = "192.168.1.101";
+constexpr uint16_t UPS_PORT = 3493;
+constexpr const char* UPS_NAME = "qnapups";
+constexpr uint32_t DASH_REFRESH_MS = 8000;
 constexpr const char* BRIDGE_HEALTH = "http://192.168.1.100:8080/health";
 
-enum class Page { Home, Networks, Password, Connecting, OtaDiag };
+enum class Page { Dashboard, Home, Networks, Password, Connecting, OtaDiag };
 struct NetworkEntry {
     String ssid;
     int rssi = -100;
@@ -42,7 +48,7 @@ int networkPage = 0;
 int displayWidth = 1280;
 int displayHeight = 720;
 
-Page page = Page::Home;
+Page page = Page::Dashboard;
 String infoMessage;
 String savedSsid;
 String savedPassword;
@@ -55,6 +61,21 @@ bool wifiReady = false;
 bool saveAfterSuccess = false;
 uint32_t connectionStart = 0;
 uint32_t lastHomeRefresh = 0;
+uint32_t lastDashboardRefresh = 0;
+bool aiBridgeOk = false;
+bool aiBridgeChecked = false;
+
+struct UpsData {
+    bool valid = false;
+    bool onBattery = false;
+    bool lowBattery = false;
+    bool charging = false;
+    int batteryPct = -1;
+    int loadPct = -1;
+    long runtimeSeconds = -1;
+    uint32_t updatedAt = 0;
+};
+UpsData ups;
 
 void logEvent(const char* event) {
     // Deliberately never log SSIDs or passwords.
@@ -99,6 +120,154 @@ bool connected() {
     return wifiReady && WiFi.status() == WL_CONNECTED;
 }
 
+
+bool readNutVar(NetworkClient& client, const char* variable, String& result) {
+    const String prefix = String("VAR ") + UPS_NAME + " " + variable + " ";
+    client.print(String("GET VAR ") + UPS_NAME + " " + variable + "\n");
+    String line = client.readStringUntil('\n');
+    line.trim();
+    if (!line.startsWith(prefix)) return false;
+    String quoted = line.substring(prefix.length());
+    if (quoted.length() < 2 || quoted[0] != '"' ||
+        quoted[quoted.length() - 1] != '"') return false;
+    result = quoted.substring(1, quoted.length() - 1);
+    return true;
+}
+
+bool positiveNumber(const String& s, long& out) {
+    if (!s.length() || s.length() > 10) return false;
+    for (size_t i = 0; i < s.length(); ++i)
+        if (s[i] < '0' || s[i] > '9') return false;
+    out = s.toInt();
+    return out >= 0;
+}
+
+void pollUpsReadOnly() {
+    UpsData sample;
+    if (!connected()) { ups = sample; return; }
+    NetworkClient client;
+    client.setTimeout(800);
+    if (!client.connect(UPS_HOST, UPS_PORT, 1200)) {
+        ups = sample;
+        logEvent("UPS NUT unavailable");
+        return;
+    }
+    String status, battery, load, runtime;
+    const bool ok =
+        readNutVar(client, "ups.status", status) &&
+        readNutVar(client, "battery.charge", battery) &&
+        readNutVar(client, "ups.load", load) &&
+        readNutVar(client, "battery.runtime", runtime);
+    client.stop();
+    long batValue = -1, loadValue = -1, runtimeValue = -1;
+    if (!ok || !positiveNumber(battery, batValue) ||
+        !positiveNumber(load, loadValue) ||
+        !positiveNumber(runtime, runtimeValue) ||
+        batValue > 100 || loadValue > 100) {
+        ups = sample;
+        logEvent("UPS NUT invalid or incomplete telemetry");
+        return;
+    }
+    const String flags = " " + status + " ";
+    sample.onBattery = flags.indexOf(" OB ") >= 0;
+    const bool onLine = flags.indexOf(" OL ") >= 0;
+    if (sample.onBattery == onLine) {
+        ups = sample;
+        logEvent("UPS NUT contradictory or absent OL/OB");
+        return;
+    }
+    sample.lowBattery = flags.indexOf(" LB ") >= 0;
+    sample.charging = flags.indexOf(" CHRG ") >= 0;
+    sample.batteryPct = static_cast<int>(batValue);
+    sample.loadPct = static_cast<int>(loadValue);
+    sample.runtimeSeconds = runtimeValue;
+    sample.updatedAt = millis();
+    sample.valid = true;
+    ups = sample;
+    Serial.printf("[InfoTAB] UPS_NUT status=%s battery=%d%% load=%d%% runtime=%ldsec\n",
+                  sample.onBattery ? "BATTERY" : "MAINS", sample.batteryPct,
+                  sample.loadPct, sample.runtimeSeconds);
+}
+
+void pollAiBridge() {
+    aiBridgeChecked = true;
+    aiBridgeOk = false;
+    if (!connected()) return;
+    NetworkClient client;
+    HTTPClient http;
+    http.setConnectTimeout(1000);
+    http.setTimeout(1400);
+    if (http.begin(client, String(BRIDGE_HEALTH))) {
+        aiBridgeOk = http.GET() == 200;
+        http.end();
+    }
+}
+
+void drawDashboard() {
+    header("Pulpit  |  UPS + AI Platform");
+    const uint16_t statusColor = !ups.valid ? TFT_YELLOW :
+                                 ups.onBattery ? TFT_RED : TFT_GREEN;
+    M5.Display.drawRoundRect(32, 112, 792, 464, 14, TFT_DARKGREY);
+    M5.Display.drawRoundRect(846, 112, displayWidth - 878, 464, 14, TFT_DARKGREY);
+    writeText(53, 131, "ZASILANIE UPS", TFT_CYAN, 3);
+    writeText(54, 184, !ups.valid ? "BRAK ODCZYTU NUT" :
+              ups.onBattery ? "AWARIA ZASILANIA - BATERIA" :
+              "ZASILANIE SIECIOWE OK", statusColor, 2);
+
+    if (ups.valid) {
+        writeText(55, 255, "BATERIA", TFT_LIGHTGREY, 2);
+        writeText(55, 288, String(ups.batteryPct) + "%", TFT_GREEN, 5);
+        writeText(360, 255, "OBCIAZENIE UPS", TFT_LIGHTGREY, 2);
+        writeText(360, 293, String(ups.loadPct) + "%", TFT_WHITE, 4);
+        writeText(55, 390, "PODTRZYMANIE (SZACUNEK UPS)", TFT_LIGHTGREY, 2);
+        writeText(55, 426, String(ups.runtimeSeconds / 60) + " min", TFT_CYAN, 4);
+        if (ups.lowBattery)
+            writeText(55, 520, "ALARM: NISKI POZIOM BATERII", TFT_RED, 2);
+        else if (ups.charging)
+            writeText(55, 520, "Akumulator: ladowanie", TFT_GREEN, 2);
+        else
+            writeText(55, 520, "Dane z QNAP NUT", TFT_LIGHTGREY, 2);
+    } else {
+        writeText(55, 270, "Sprawdz polaczenie z QNAP", TFT_YELLOW, 2);
+        writeText(55, 313, "192.168.1.101:3493", TFT_WHITE, 2);
+        writeText(55, 363, "Nie pokazujemy nieaktualnych wartosci.", TFT_LIGHTGREY);
+    }
+    writeText(867, 136, "AI PLATFORM", TFT_CYAN, 3);
+    writeText(867, 196, aiBridgeChecked ? (aiBridgeOk ? "ONLINE" : "OFFLINE") :
+              "SPRAWDZANIE", aiBridgeOk ? TFT_GREEN : TFT_YELLOW, 3);
+    writeText(867, 257, "192.168.1.100", TFT_WHITE, 2);
+    writeText(867, 306, "AI Bridge /health", TFT_LIGHTGREY, 2);
+    writeText(867, 375, "INFO TAB / SIEC", TFT_CYAN, 2);
+    writeText(867, 423, connected() ? WiFi.localIP().toString() :
+              String("BRAK WI-FI"), connected() ? TFT_GREEN : TFT_YELLOW, 2);
+    writeText(867, 474, connected() ? String(WiFi.RSSI()) + " dBm" :
+              String("Wybierz SIEC WIFI"), TFT_LIGHTGREY, 2);
+    button(32, 608, 264, 85, "ODSWIEZ", TFT_DARKCYAN, 2);
+    button(316, 608, 286, 85, "SIEC WIFI", TFT_DARKGREEN, 2);
+    button(622, 608, 300, 85, "OTA DIAG", TFT_NAVY, 2);
+    writeText(960, 635, "InfoTAB v0.5", TFT_LIGHTGREY, 2);
+}
+
+void refreshDashboard() {
+    pollUpsReadOnly();
+    pollAiBridge();
+    lastDashboardRefresh = millis();
+    if (page == Page::Dashboard) drawDashboard();
+}
+
+void handleDashboard(int x, int y) {
+    if (inside(x, y, 32, 608, 264, 85)) {
+        refreshDashboard();
+    } else if (inside(x, y, 316, 608, 286, 85)) {
+        page = Page::Home;
+        render();
+    } else if (inside(x, y, 622, 608, 300, 85)) {
+        page = Page::OtaDiag;
+        infoMessage = "Odczyt partycji - bez aktualizacji OTA.";
+        render();
+    }
+}
+
 void drawHome() {
     header("Siec / ustawienia");
     const bool online = connected();
@@ -124,6 +293,7 @@ void drawHome() {
         button(777, 450, 335, 90, "ZAPOMNIJ SIEC", TFT_MAROON, 2);
     }
     button(45, 557, 375, 67, "OTA DIAG (ODCZYT)", TFT_NAVY, 2);
+    button(450, 557, 330, 67, "WROC DO PULPITU", TFT_DARKGREEN, 2);
     writeText(45, displayHeight - 62, "Konfiguracja lokalna | bez hasel w GitHub", TFT_LIGHTGREY);
 }
 
@@ -282,6 +452,7 @@ void drawConnecting() {
 
 void render() {
     switch (page) {
+        case Page::Dashboard: drawDashboard(); break;
         case Page::Home: drawHome(); break;
         case Page::Networks: drawNetworks(); break;
         case Page::Password: drawPassword(); break;
@@ -404,7 +575,10 @@ void selectNetwork(int index) {
 }
 
 void handleHome(int x, int y) {
-    if (inside(x, y, 45, 557, 375, 67)) {
+    if (inside(x, y, 450, 557, 330, 67)) {
+        page = Page::Dashboard;
+        render();
+    } else if (inside(x, y, 45, 557, 375, 67)) {
         page = Page::OtaDiag;
         infoMessage = "Nacisnij TEST AI BRIDGE, by sprawdzic API.";
         render();
@@ -521,9 +695,9 @@ void updateConnection() {
         pendingPassword = "";
         infoMessage = stored ? "Polaczenie udane." :
                               "Polaczono, ale zapis ustawien nie powiodl sie.";
-        page = Page::Home;
-        render();
-        logEvent("Wi-Fi connected; IP available on screen");
+        page = Page::Dashboard;
+        refreshDashboard();
+        logEvent("Wi-Fi connected; IP available on dashboard");
     } else if (millis() - connectionStart > CONNECT_TIMEOUT_MS) {
         WiFi.disconnect();
         pendingPassword = "";
@@ -544,7 +718,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.4-preflight boot: Wi-Fi + read-only OTA diagnostic");
+    logEvent("v0.5 boot: dashboard + Wi-Fi + read-only OTA diagnostics");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
@@ -562,6 +736,7 @@ void loop() {
         const int x = touch.x;
         const int y = touch.y;
         switch (page) {
+            case Page::Dashboard: handleDashboard(x, y); break;
             case Page::Home: handleHome(x, y); break;
             case Page::Networks: handleNetworks(x, y); break;
             case Page::Password: handlePassword(x, y); break;
@@ -570,6 +745,19 @@ void loop() {
         }
     }
     updateConnection();
+    if (page == Page::Dashboard && connected() &&
+        (lastDashboardRefresh == 0 ||
+         millis() - lastDashboardRefresh >= DASH_REFRESH_MS)) {
+        refreshDashboard();
+    }
+    if (page == Page::Dashboard && !connected() &&
+        millis() - lastDashboardRefresh >= DASH_REFRESH_MS) {
+        ups.valid = false;
+        aiBridgeChecked = true;
+        aiBridgeOk = false;
+        lastDashboardRefresh = millis();
+        drawDashboard();
+    }
     if (page == Page::Home && millis() - lastHomeRefresh >= HOME_REFRESH_MS) {
         lastHomeRefresh = millis();
         render();
