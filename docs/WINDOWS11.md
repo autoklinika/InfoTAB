@@ -83,7 +83,9 @@ Nie zmienia globalnego Pythona w Windows i nie wgrywa firmware do urządzenia.
 
 Nie używamy override `tool-esptoolpy@5.0.2` z ZIP — w połączeniu z
 `platform-espressif32#54.03.21` powodował brak pliku `esptool.py`.
-Wymuszamy zgodny `tool-esptoolpy@5.0.0` w konfiguracji projektu.
+Nie ustawiamy `platform_packages`. Platforma `pioarduino/platform-espressif32#54.03.21` sama wskazuje odpowiedni pakiet `pioarduino/esptool` `v5.0.0-dev1`. Próba ręcznego przypięcia `tool-esptoolpy@5.0.0` kończy się `UnknownPackageError`, ponieważ ta specyfikacja nie istnieje w rejestrze.
+
+Jeśli na komputerze pozostał niezgodny pakiet 5.0.2, PlatformIO powinien przywrócić wymagany przez platformę pakiet. Gdyby po `git pull` nadal brakowało `esptool.py`, sprawdź wersję użytego pakietu w wynikach Build — wtedy usuniemy tylko niezgodny pakiet z lokalnego cache PlatformIO i pozwolimy narzędziu pobrać oryginalny.
 
 Po Build sprawdź `SUCCESS`; dopiero wtedy wykonamy Upload na COM6.
 
