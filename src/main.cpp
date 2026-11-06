@@ -121,15 +121,11 @@ void button(int x, int y, int w, int h, const String& label,
 }
 
 void header(const String& title) {
+    // No separate topbar, even in settings and OTA subpages.
     M5.Display.fillScreen(0x322A);
-    M5.Display.fillRect(0, 0, displayWidth, 90, 0x532E);
-    M5.Display.setTextColor(0x8678, 0x532E);
+    M5.Display.setTextColor(0xFFFF, 0x322A);
     M5.Display.setTextSize(3);
-    M5.Display.setCursor(MARGIN, 22);
-    M5.Display.print("InfoTAB");
-    M5.Display.setTextColor(0xFFFF, 0x532E);
-    M5.Display.setTextSize(2);
-    M5.Display.setCursor(MARGIN + 310, 34);
+    M5.Display.setCursor(MARGIN, 24);
     M5.Display.print(title);
 }
 
