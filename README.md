@@ -2,6 +2,45 @@
 
 Oprogramowanie wyświetlacza informacyjnego InfoTAB na M5Stack Tab5 (ESP32-P4).
 
+## InfoTAB v0.6 — aplikacja UPS (Modbus) + Wi-Fi OTA
+
+**Aktualny priorytet:** właściwa aplikacja, brak migracji partycji w tym etapie.
+
+- Odczyt UPS bezpośrednio z `192.168.1.102:502` przez Modbus TCP
+  (bateria, obciążenie %, napięcia, szacowany czas; bez NUT).
+- Pulpit odświeża tylko zmienne fragmenty — bez migania całego ekranu co 5 s.
+- Aktualizacja OTA po Wi-Fi: przycisk `OTA WIFI` na InfoTAB, sesja 5 min,
+  jednorazowe hasło, uploader Windows 11.
+- Firmware OTA musi mieścić się w **obecnych partycjach 1280 KiB**.
+  Nie uruchamiaj `infotab_tab5_16mb_audit -t upload`.
+
+**Jednorazowe wgranie v0.6 przez USB-C (COM6):**
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
+```
+
+Dopiero po `BUILD SUCCESS`:
+
+```powershell
+& "$env:USERPROFILE\.platformio\penv\Scripts\platformio.exe" run -e infotab_tab5 -t upload
+```
+
+**Kolejne aktualizacje po Wi-Fi** (najpierw `OTA WIFI → AKTYWUJ OTA`
+na InfoTAB, potem w terminalu Windows):
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-windows.ps1
+```
+
+Skrypt zapyta lokalnie o hasło z ekranu; nie podawaj go w rozmowie.
+Szczegóły i lista testów: [docs/INFOTAB_V06.md](docs/INFOTAB_V06.md).
+
+**Status:** kod v0.6 zapisany; kompilacja Windows, odczyt Modbus z Tab5
+i pierwszy transfer OTA wymagają potwierdzenia testami sprzętowymi.
+
 ## Status
 
 v0.1: kompilacja i uruchomienie przez COM6 potwierdzone. **v0.2: PASS** dla dotyku i skanowania Wi-Fi na rzeczywistym Tab5. **v0.3: połączenie z Wi-Fi skonfigurowane na ekranie — PASS pierwszego połączenia (2026-11-06).** Automatyczne połączenie po restarcie — PASS, aktualny IP DHCP 192.168.1.38. v0.4-preflight: test sprzętowy PASS; aktywna app0 i zapasowa app1 mają po 1280 KiB, boot=running, AI Bridge HTTP 200. Aktualizacje OTA i integracja UPS nie są jeszcze wdrożone.
