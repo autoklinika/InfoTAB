@@ -1,5 +1,20 @@
 # InfoTAB
 
+## v0.9.1 — AI Platform: wyłącznie lista usług
+
+Zamiast kafelków i szczegółów API, ekran AI Platform wyświetla
+13 usług w czytelnej liście: nazwa + **URUCHOMIONA / ZATRZYMANA /
+BRAK DANYCH**. Dane pochodzą z nowego, odizolowanego serwisu
+\`http://192.168.1.100:18092/services\`, odczytującego stan
+systemd, systemd użytkownika i kontenera Qdrant.
+Backend zainstalowano na Minisforum jako \`infotab-services-api.service\`;
+**wymagana jednorazowa, ograniczona reguła zapory UFW dla IP InfoTAB**.
+Pozostałe ekrany i OTA nie są zmieniane.
+
+Instrukcje i testy: [docs/AI_PLATFORM_SERVICES_V091.md](docs/AI_PLATFORM_SERVICES_V091.md).
+Kompilacja/OTA i odczyt z Tab5: **PENDING**.
+
+
 ## InfoTAB v0.9 — AI PLATFORM / NAS / UPS / USTAWIENIA
 
 **Nowy układ HMI:** bez topbara, cztery ekrany przełączane gestami
