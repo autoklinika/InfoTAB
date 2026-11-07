@@ -28,6 +28,15 @@
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
+## InfoTAB v0.9.2 — UPS jako lista
+
+- [x] Ekran UPS przebudowany z kafelków na 9-wierszową listę parametrów.
+- [x] Zachowano rzeczywisty odczyt Modbus TCP, jednostki i oznaczenie szacunkowej mocy.
+- [x] Przy cyklicznym odświeżaniu aktualizowane są tylko zmienione wartości, bez czyszczenia ekranu.
+- [x] Pozostałe strony, dolna nawigacja i OTA bez zmian.
+- [ ] Build Windows oraz transfer OTA v0.9.2: PENDING.
+- [ ] Test listy UPS na fizycznym Tab5: PENDING.
+
 ## InfoTAB v0.9.1 — rzeczywista lista usług AI Platform
 
 - [x] Usunięto kafelki AI Bridge, bazy i wersji API z modułu AI Platform.
