@@ -466,7 +466,7 @@ void drawPower() {
         uiText(56, y + 8, labels[i], UI_WHITE, 2, UI_BG);
         M5.Display.drawFastHLine(48, y + 46, 1181, UI_BORDER);
     }
-    uiText(42, 593, "ZRODLO: MODBUS TCP 192.168.1.102:502  |  MOC: WARTOSC ORIENTACYJNA",
+    uiText(42, 583, "ZRODLO: MODBUS TCP 192.168.1.102:502  |  MOC: WARTOSC ORIENTACYJNA",
            UI_MUTED, 2, UI_BG);
     drawPowerValues();
 }
@@ -522,7 +522,7 @@ void drawServiceValues() {
     valueAt(675, 136, 535, 47,
             otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
             otaArmed ? UI_GOOD : UI_WHITE, 2);
-    valueAt(57, 427, 540, 44, "InfoTAB v0.9.1", UI_WHITE, 3);
+    valueAt(57, 427, 540, 44, "InfoTAB v0.9.2", UI_WHITE, 3);
     valueAt(57, 509, 540, 39,
             String("Czas pracy: ") + String(millis() / 60000) + " min", UI_MUTED, 2);
 }
@@ -725,7 +725,7 @@ void drawOtaDiag() {
     const esp_partition_t* next = esp_ota_get_next_update_partition(nullptr);
     const esp_partition_t* boot = esp_ota_get_boot_partition();
     const uint32_t sketchBytes = ESP.getSketchSize();
-    writeText(45, 116, "Firmware InfoTAB: v0.9.1", TFT_CYAN, 2);
+    writeText(45, 116, "Firmware InfoTAB: v0.9.2", TFT_CYAN, 2);
     writeText(45, 160, "Obraz programu: " + String(sketchBytes) + " B", TFT_WHITE, 2);
     if (running) {
         writeText(45, 218, "Aktywna: " + String(running->label), TFT_GREEN, 2);
@@ -1159,7 +1159,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.9.1: AI Platform live service status list");
+    logEvent("v0.9.2: UPS and AI Platform list views, Modbus and OTA");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
