@@ -28,6 +28,18 @@
 - [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
 - [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
 
+## InfoTAB v0.9.1 — rzeczywista lista usług AI Platform
+
+- [x] Usunięto kafelki AI Bridge, bazy i wersji API z modułu AI Platform.
+- [x] Dodano płaską listę 13 usług z aktualizacją tylko kolumny statusów.
+- [x] Odrębny backend 192.168.1.100:18092/services read-only, z allowlist usług.
+- [x] Odczyt rzeczywisty z systemd, systemd --user i Dockera: 13/13 running w teście.
+- [x] Backend uruchomiony jako usługa użytkownika bez restartu produkcyjnych procesów.
+- [ ] Jednorazowo dopuścić port TCP 18092 w UFW z IP InfoTAB (wąska reguła; wymaga sudo).
+- [ ] Potwierdzić sieciowy odczyt z samego Tab5 po Wi-Fi.
+- [ ] Build Windows i OTA v0.9.1: PENDING.
+- [ ] Przegląd listy 13 usług na ekranie Tab5: PENDING.
+
 ## InfoTAB v0.9 — modułowe HMI bez górnego paska
 
 - [x] Zamiast topbara pełne wykorzystanie przestrzeni roboczej modułów.
