@@ -1,0 +1,156 @@
+# InfoTAB — plan wdrożenia
+
+## Etap 0: USB / obraz startowy (pierwszy test zaliczony)
+- [x] Struktura projektu PlatformIO dla M5Stack Tab5
+- [x] Wskazanie COM6 na Windows 11
+- [x] Zweryfikowana lokalnie kompilacja na Windows 11 (`BUILD SUCCESS`, potwierdzone przez użytkownika 2026-11-06)
+- [x] Pierwsze wgranie przez COM6 i uruchomienie InfoTAB na ekranie (potwierdzone przez użytkownika 2026-11-06)
+- [ ] Potwierdzenie logów portu szeregowego (115200 bps)
+- [ ] Potwierdzona rewizja sterownika ekranu na urządzeniu
+
+## Etap 1: ekran i HMI (test dotyku v0.2: PASS)
+- [x] Reakcja dotyku na rzeczywistym Tab5 — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [ ] Szczegółowa weryfikacja orientacji, narożników i kalibracji dotyku
+- [ ] Projekt graficzny ekranu InfoTAB
+- [ ] Obsługa błędów, watchdog, komunikaty stanu
+
+## Etap 2: sieć
+- [x] Skanowanie Wi-Fi przez ESP32-C6/SDIO — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [x] Wykrywanie sieci Wi-Fi na rzeczywistym Tab5 — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [x] Kod v0.3: wybór SSID, klawiatura dotykowa i łączenie Wi-Fi (pierwsze połączenie potwierdzone na sprzęcie 2026-11-06)
+- [x] Pierwsze połączenie z wybraną siecią Wi-Fi — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [x] Adres IP przydzielony przez DHCP, odczytany na Tab5: 192.168.1.38 (potwierdzone przez użytkownika 2026-11-06)
+- [x] Automatyczne ponowne połączenie po restarcie — PASS (potwierdzone przez użytkownika 2026-11-06)
+- [ ] Usunięcie danych sieci (funkcja dostępna, test sprzętowy PENDING)
+- [x] Endpoint AI Bridge `/health` z hosta 192.168.1.100:8080 odpowiada HTTP 200 (test na Minisforum)
+- [x] Test dostępności AI Bridge `/health` bezpośrednio z Tab5 po Wi-Fi: HTTP 200 (zdjęcie użytkownika, 2026-11-06)
+- [x] Kod konfiguracji sieci bez haseł w repozytorium; trwałość zapisu potwierdzona testem restartu 2026-11-06
+- [ ] Dostęp do lokalnego API AI Platform / serwera telemetrii UPS
+- [ ] Stan połączenia, timeouty, ostatni poprawny odczyt
+
+## InfoTAB v0.9.2 — UPS jako lista
+
+- [x] Ekran UPS przebudowany z kafelków na 9-wierszową listę parametrów.
+- [x] Zachowano rzeczywisty odczyt Modbus TCP, jednostki i oznaczenie szacunkowej mocy.
+- [x] Przy cyklicznym odświeżaniu aktualizowane są tylko zmienione wartości, bez czyszczenia ekranu.
+- [x] Pozostałe strony, dolna nawigacja i OTA bez zmian.
+- [ ] Build Windows oraz transfer OTA v0.9.2: PENDING.
+- [ ] Test listy UPS na fizycznym Tab5: PENDING.
+
+## InfoTAB v0.9.1 — rzeczywista lista usług AI Platform
+
+- [x] Usunięto kafelki AI Bridge, bazy i wersji API z modułu AI Platform.
+- [x] Dodano płaską listę 13 usług z aktualizacją tylko kolumny statusów.
+- [x] Odrębny backend 192.168.1.100:18092/services read-only, z allowlist usług.
+- [x] Odczyt rzeczywisty z systemd, systemd --user i Dockera: 13/13 running w teście.
+- [x] Backend uruchomiony jako usługa użytkownika bez restartu produkcyjnych procesów.
+- [ ] Jednorazowo dopuścić port TCP 18092 w UFW z IP InfoTAB (wąska reguła; wymaga sudo).
+- [ ] Potwierdzić sieciowy odczyt z samego Tab5 po Wi-Fi.
+- [ ] Build Windows i OTA v0.9.1: PENDING.
+- [ ] Przegląd listy 13 usług na ekranie Tab5: PENDING.
+
+## InfoTAB v0.9 — modułowe HMI bez górnego paska
+
+- [x] Zamiast topbara pełne wykorzystanie przestrzeni roboczej modułów.
+- [x] Dolne strony i gesty w kolejności: AI PLATFORM → NAS → UPS → USTAWIENIA.
+- [x] AI Platform: rzeczywiste /health — AI Bridge, baza, wersja i stan kontroli Ollama.
+- [x] NAS: tylko dostępność portów TCP 443/8080, bez fikcyjnych statystyk dysków i backupów.
+- [x] UPS: osiem kafelków Modbus, bez zmiany protokołu i źródła danych.
+- [x] Ustawienia: Wi-Fi, OTA, wersja i diagnostyka.
+- [x] Wymieniono także legacy topbar w podstronach konfiguracji/OTA.
+- [x] Zabezpieczono źródła v0.8 w `stable/v0.8-hmi-pass`.
+- [ ] Build Windows v0.9 i upload OTA: PENDING.
+- [ ] Test czterech ekranów, swipe, odczytów i braku migania na Tab5: PENDING.
+- [ ] Rozszerzona integracja API QNAP (SMART, pojemność, backup): odrębny etap.
+
+## InfoTAB v0.8 — GUI i OTA
+
+- [x] Projekt: ekran UPS w układzie 4×2 — osiem niezależnych kafelków.
+- [x] Rozjaśnione barwy tła, kart, obramowań i tekstu.
+- [x] Dodano szacowaną moc wyjściową z rejestru 156 (weryfikacja skali 0,1 kW PENDING); nie jest to pomiar poboru z sieci.
+- [x] OTA bez hasła, ale tylko po fizycznej aktywacji na InfoTAB przez 120 sekund.
+- [x] Nowy uploader Windows bez hasła; stary uploader zachowany na przejście z v0.7.
+- [ ] Kompilacja i OTA przejściowe v0.7→v0.8: PENDING.
+- [ ] Odbiór rozjaśnionego GUI i wszystkich kafelków na urządzeniu: PENDING.
+- [ ] Test kolejnej aktualizacji bez hasła, tylko podczas ręcznie aktywowanej sesji: PENDING.
+- [ ] Separacja sieci OTA i docelowe uwierzytelnianie/podpisy: później.
+
+## Etap 3C: InfoTAB v0.8 — jasnosc, kafelki i moc
+
+- [x] Zmieniono jasnosc wspolnej palety i ekranow serwisowych.
+- [x] Wszystkie osiem wartosci na stronie UPS ma osobne kafelki.
+- [x] Dodano odczyt Modbus 156/159 i orientacyjna moc wyjsciowa (skala x100 PENDING kalibracji).
+- [x] Zachowano dzialajacy Modbus, gesty i OTA z jednorazowym haslem.
+- [ ] Build Windows 11 i instalacja OTA v0.8 na Tab5.
+- [ ] Zdjecie/ocena czytelnosci i ewentualne poprawki kafelkow.
+- [ ] Kalibracja mocy porownaniem do panelu UPS przy roznych obciazeniach.
+
+## Etap 3B: InfoTAB v0.7 — wieloekranowy HMI
+
+- [x] Dodano 4 ekrany główne: START / UPS / SIEC-AI / SERWIS.
+- [x] Dodano gest poziomy oraz dolne zakładki, oddzielono tap i swipe.
+- [x] Spójna typografia, grafitowa paleta, stonowany kolor akcentowy.
+- [x] Odświeżanie tylko obszarów wartości — bez cyklicznego `fillScreen()`.
+- [x] Zostawiono sprawdzony Modbus TCP i OTA przez Wi-Fi.
+- [x] Zabezpieczono kod v0.6 w `stable/v0.6-hardware-pass`.
+- [ ] Build na Windows 11 i transfer OTA v0.7: PENDING.
+- [ ] Potwierdzenie wyglądu na rzeczywistym ekranie: PENDING.
+- [ ] Test swipe, zakładek, dotyku, aktualizacji danych: PENDING.
+
+## Etap 3A: v0.6 — docelowy transport i GUI
+
+- [x] Odczyt rzeczywistego PowerWalker przez Modbus TCP `192.168.1.102:502` z Minisforum (FC03, rejestry 112/128/144/165).
+- [x] Zmapowano i potwierdzono baterię 93%, obciążenie 10%, napięcie 230 V, pozostały czas 75:05 w odczycie testowym.
+- [x] Zastąpiono w firmware źródło NUT bezpośrednim Modbus TCP.
+- [x] Usunięto pełne `render()` wykonywane co 5 s; pulpit odświeża tylko zmienne obszary.
+- [x] Dodano nowe rozmieszczenie kart, statusów i przycisków.
+- [x] Dodano ręczny 5-minutowy odbiornik OTA z losowym hasłem na ekranie oraz uploader Windows.
+- [ ] Windows Build v0.6 i kontrola, czy binarka mieści się w 1280 KiB.
+- [x] InfoTAB v0.6 uruchamia się na sprzęcie, odczytuje UPS przez Modbus i nie miga ekranem — PASS (potwierdzenie użytkownika 2026-11-06).
+- [x] Transfer OTA przez Wi-Fi: `WIFI OTA TRANSFER SUCCESS` (potwierdzenie użytkownika 2026-11-06). Autoryzacja/połączenie TCP i przesłanie obrazu zakończone sukcesem.
+- [x] Po Wi-Fi OTA: poprawny boot, automatyczne Wi-Fi, rzeczywisty Modbus i brak migania LCD — 4/4 PASS (potwierdzenie użytkownika 2026-11-06).
+- [ ] Produkcyjne uwierzytelnianie/podpisy i rollback: późniejszy etap.
+
+## Etap 3: telemetria UPS — główny priorytet
+
+- [x] Potwierdzono dostępne pola z QNAP NUT (z Minisforum): `ups.status`, `battery.charge`, `ups.load`, `battery.runtime`.
+- [x] Dodano do InfoTAB v0.5 pulpit UPS + AI Bridge, pobierający odczyty po Wi-Fi; stan sprzętowy PENDING.
+- [ ] Build v0.5 na Windows 11 i Upload przez COM6.
+- [ ] Potwierdzić bezpośredni odczyt NUT z Tab5; jeśli NAS blokuje dostęp, stworzyć proxy read-only na Minisforum.
+- [ ] Potwierdzić alarm OB/LB, odświeżanie i zachowanie przy zaniku sieci.
+
+## Etap 3: telemetria UPS
+- [ ] Uzgodnienie kontraktu API z rzeczywistymi danymi UPS
+- [ ] Dane: moc, obciążenie, bateria, zasilanie, alarmy (tylko potwierdzone odczyty)
+- [ ] Interfejs lokalny UPS, znaczniki czasu, rozłączenia
+
+## Etap 4: OTA
+- [x] Ustalono konflikt: board manifest sugeruje `default_16MB.csv` (app0/app1 po 6,25 MiB), ale **urządzenie faktycznie używa** app0/app1 po **1280 KiB** (`default.csv` / layout 4 MB). OTA BLOCKED do rozwiązania.
+- [x] Diagnostyka v0.4 na sprzęcie PASS: app0 0x10000/1280 KiB, app1 0x150000/1280 KiB, boot=running, Wi-Fi online, AI Bridge HTTP 200 (zdjęcia 2026-11-06)
+- [x] Dodano i uruchomiono read-only `scripts/audit-partitions.py` (standardowy build i wariant 16 MB: oba PASS 2026-11-06)
+- [x] Rozmiar działającego obrazu odczytany z urządzenia: 932384 B (zdjęcia 2026-11-06)
+- [x] Lokalny audyt obecnego `partitions.bin` wykonany; 4 MB layout zgodny ze zdjęciami (użytkownik 2026-11-06)
+- [x] Przygotowano osobny wariant kompilacji `infotab_tab5_16mb_audit` z jawnie wskazanym CSV 16 MB; BUILD PASS (2026-11-06, 02:03)
+- [x] Potwierdzono lokalnie dwa sloty OTA po 6400 KiB, firmware 932416 B, wolne 5621184 B w każdym (2026-11-06)
+- [x] Fizyczna pamięć Flash potwierdzona przez COM6: 16 MB, ESP32-P4 rev. 1.3; `esptool flash-id` READ ONLY PASS (2026-11-06)
+- [x] Skrypt backupu pełnych 16 MiB i walidacja rozmiaru, SHA-256 oraz starego layoutu: PASS na rzeczywistym sprzęcie (2026-11-06)
+- [x] Potwierdzono pełny, lokalny backup 16 MiB: `BACKUP VERIFIED - READ ONLY PASS`, SHA-256, stary układ partycji (2026-11-06). Kopia prywatna, nie publikować.
+- [x] Read-only audyt prywatnej kopii i eFuse/ROM: PASS techniczny (2026-11-06), wykryto NON-ERASED w starych app1/spiffs/coredump
+- [x] Secure Boot: Disabled, Flash Encryption: Disabled, SPI_BOOT_CRYPT_CNT=0, flags=0 — potwierdzone na ESP32-P4 (2026-11-06)
+- [ ] Ustalić, czy dane w starym SPIFFS są użytkowe; nie zakładać, że NON-ERASED oznacza dane do odrzucenia
+- [x] Przygotowano `docs/MIGRATION_16MB_PLAN.md` — plan migracji z warunkami wejścia i zasadą bez zapisów (DRAFT)
+- [ ] Sprawdzić stan bootloadera i przygotować plan bezpiecznej migracji USB bez pełnego kasowania Flash
+- [ ] Plan migracji partycji do pełnej przestrzeni 16 MB: backup/odzyskanie NVS, USB recovery, test rollback
+- [ ] Bezpieczna aktualizacja OTA + sprawdzanie obrazu
+- [ ] Potwierdzony rollback / recovery przez USB
+- [ ] Wydania firmware i opcjonalna CI w GitHub Actions
+
+## Incydent v0.2 — 2026-11-06
+
+- Użytkownik zgłosił czarny ekran po próbie v0.2, ale v0.1 uruchomił się po naciśnięciu przycisku zasilania.
+- Tymczasowo przywrócono działającą wersję v0.1, następnie ponownie przygotowano v0.2 do testu z krótkim naciśnięciem przycisku zasilania po wgraniu.
+- Hipoteza: urządzenie pozostawało wyłączone po uploadzie. Przyczyna niepotwierdzona dla v0.2; jeśli problem wystąpi po włączeniu, trzeba odczytać log COM6.
+- Ponowny test v0.2 zakończył się sukcesem: użytkownik potwierdził działanie dotyku i skanowania Wi-Fi.
+- Czarny ekran najprawdopodobniej wynikał ze stanu zasilania, ale bez zarejestrowanego logu startowego nie uznajemy tej przyczyny za definitywnie potwierdzoną.
+
+Żaden etap niezakończony testem sprzętowym nie jest oznaczany jako PASS.

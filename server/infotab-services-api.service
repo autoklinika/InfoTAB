@@ -1,0 +1,17 @@
+[Unit]
+Description=InfoTAB - AI Platform read-only service status endpoint
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -B /home/harrypotter/.local/share/infotab-services-api/infotab_services.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+UMask=0077
+MemoryMax=64M
+CPUQuota=20%
+Environment=PYTHONDONTWRITEBYTECODE=1
+
+[Install]
+WantedBy=default.target
