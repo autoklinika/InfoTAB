@@ -407,45 +407,70 @@ void drawOverview() {
 }
 // Eight aligned tiles; each live measurement has its own light graphite card.
 // UPS: the entire module is eight tiles. No topbar or outside diagnostics.
-void powerTile(int col, int row, const String& label, const String& note) {
-    const int x = 32 + col * 308, y = 24 + row * 287;
-    panel(x, y, 292, 264);
-    uiText(x + 21, y + 30, label, UI_MUTED, 2);
-    rule(x + 21, y + 213, 249);
-    uiText(x + 21, y + 227, note, UI_MUTED, 1);
-}
-void tilePowerValue(int col, int row, const String& value,
-                    uint16_t color = UI_WHITE, int scale = 3) {
-    const int x = 53 + col * 308, y = 140 + row * 287;
-    valueAt(x, y, 249, 70, value, color, scale);
-}
+// UPS module uses a clear single-column list, consistent with AI Platform.
+// Only changed right-column values are repainted during polling.
+static constexpr size_t UPS_ROW_COUNT = 9;
+String upsLastShown[UPS_ROW_COUNT];
+uint16_t upsLastColor[UPS_ROW_COUNT]{};
+bool upsListPainted = false;
+
 void drawPowerValues() {
-    tilePowerValue(0, 0, ups.valid ? String(ups.inputVoltTenths / 10.0f, 1) + " V" : "--");
-    tilePowerValue(1, 0, ups.valid ? String(ups.outputVoltTenths / 10.0f, 1) + " V" : "--");
-    tilePowerValue(2, 0, ups.valid ? String(ups.outputHzTenths / 10.0f, 1) + " Hz" : "--");
-    tilePowerValue(3, 0, ups.valid && ups.powerWattsEstimate >= 0 ?
-                   String("~") + String(ups.powerWattsEstimate) + " W" : "--");
-    tilePowerValue(0, 1, ups.valid ? String(ups.batteryPct) + "%" : "--",
-                   ups.valid ? UI_GOOD : UI_WARNING, 4);
-    tilePowerValue(1, 1, ups.valid ? String(ups.loadPct) + "%" : "--", UI_WHITE, 4);
-    tilePowerValue(2, 1, ups.valid ? String(ups.runtimeSeconds / 60) + " min" : "--");
-    tilePowerValue(3, 1, ups.valid && ups.batteryVoltTenths > 0 ?
-                   String(ups.batteryVoltTenths / 10.0f, 1) + " V" : "--");
+    String values[UPS_ROW_COUNT] = {
+        !ups.valid ? "--" : (ups.modeCode == 4 ?
+            String("NORMALNY") : String("TRYB ") + String(ups.modeCode)),
+        ups.valid ? String(ups.inputVoltTenths / 10.0f, 1) + " V" : "--",
+        ups.valid ? String(ups.outputVoltTenths / 10.0f, 1) + " V" : "--",
+        ups.valid ? String(ups.outputHzTenths / 10.0f, 1) + " Hz" : "--",
+        ups.valid && ups.powerWattsEstimate >= 0 ?
+            String("~") + String(ups.powerWattsEstimate) + " W" : "--",
+        ups.valid ? String(ups.batteryPct) + "%" : "--",
+        ups.valid ? String(ups.loadPct) + "%" : "--",
+        ups.valid ? String(ups.runtimeSeconds / 60) + " min" : "--",
+        ups.valid && ups.batteryVoltTenths > 0 ?
+            String(ups.batteryVoltTenths / 10.0f, 1) + " V" : "--"
+    };
+    for (size_t i = 0; i < UPS_ROW_COUNT; ++i) {
+        uint16_t color = UI_WHITE;
+        if (!ups.valid) color = UI_MUTED;
+        else if (i == 0) color = upsStateColor();
+        else if (i == 5) color = UI_GOOD;
+        if (upsListPainted && values[i] == upsLastShown[i] &&
+            color == upsLastColor[i]) continue;
+        const int y = 92 + static_cast<int>(i) * 54;
+        M5.Display.fillRect(903, y, 326, 40, UI_BG);
+        uiText(943, y + 8, values[i], color, 2, UI_BG);
+        upsLastShown[i] = values[i];
+        upsLastColor[i] = color;
+    }
+    upsListPainted = true;
 }
+
 void drawPower() {
     tabShell("", 2);
-    powerTile(0, 0, "WEJSCIE", "Napiecie sieci");
-    powerTile(1, 0, "WYJSCIE", "Napiecie UPS");
-    powerTile(2, 0, "CZESTOTLIWOSC", "Wyjscie UPS");
-    powerTile(3, 0, "MOC WYJ. *", "Szacunek / reg156");
-    powerTile(0, 1, "BATERIA", "Naladowanie");
-    powerTile(1, 1, "OBCIAZENIE", "Procent nominalny");
-    powerTile(2, 1, "CZAS UPS", "Szacunek urzadzenia");
-    powerTile(3, 1, "NAP. BATERII", "Akumulator");
+    upsListPainted = false;
+    static const char* labels[UPS_ROW_COUNT] = {
+        "Stan UPS",
+        "Napiecie wejsciowe",
+        "Napiecie wyjsciowe",
+        "Czestotliwosc wyjscia",
+        "Moc wyjsciowa (szac.)",
+        "Naladowanie baterii",
+        "Obciazenie UPS",
+        "Czas podtrzymania (szac.)",
+        "Napiecie baterii"
+    };
+    uiText(42, 29, "PARAMETRY UPS", UI_WHITE, 3, UI_BG);
+    M5.Display.drawFastHLine(40, 74, 1193, UI_BORDER);
+    for (size_t i = 0; i < UPS_ROW_COUNT; ++i) {
+        const int y = 92 + static_cast<int>(i) * 54;
+        uiText(56, y + 8, labels[i], UI_WHITE, 2, UI_BG);
+        M5.Display.drawFastHLine(48, y + 46, 1181, UI_BORDER);
+    }
+    uiText(42, 593, "ZRODLO: MODBUS TCP 192.168.1.102:502  |  MOC: WARTOSC ORIENTACYJNA",
+           UI_MUTED, 2, UI_BG);
     drawPowerValues();
 }
-// NAS screen uses verified TCP port reachability only.
-// Disk/RAID/backup metrics require a future authenticated QNAP API.
+
 void drawNetworkValues() {
     const bool online = nasChecked && (nasHttps || nasQts);
     valueAt(58, 145, 540, 64,
