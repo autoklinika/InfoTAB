@@ -36,6 +36,7 @@ constexpr uint32_t HOME_REFRESH_MS = 5000;
 // Direct PowerWalker Modbus TCP is implemented in InfoTABModbus.h.
 constexpr uint32_t DASH_REFRESH_MS = 8000;
 constexpr const char* BRIDGE_HEALTH = "http://192.168.1.100:8080/health";
+constexpr const char* SERVICES_URL = "http://192.168.1.100:18092/services";
 
 enum class Page { Dashboard, Power, NetworkInfo, Service, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
 struct NetworkEntry {
@@ -177,6 +178,74 @@ String healthString(const String& body, const char* key) {
     if (stop < 0 || stop - pos > 40) return "--";
     return body.substring(pos + 1, stop);
 }
+// Exact identifiers from server/infotab_services.py on the AI Platform.
+// 13 fixed rows; never execute a command or accept arbitrary unit names.
+enum class ServiceState : uint8_t { Unknown, Running, Stopped };
+struct ServiceRow {
+    const char* id;
+    const char* label;
+    ServiceState state;
+    ServiceState lastDrawn;
+};
+ServiceRow aiServices[] = {
+    {"bridge",       "AI Bridge",          ServiceState::Unknown, ServiceState::Unknown},
+    {"gateway",      "Gateway / RM",       ServiceState::Unknown, ServiceState::Unknown},
+    {"ollama",       "Ollama",             ServiceState::Unknown, ServiceState::Unknown},
+    {"ollama_rtx",   "Ollama RTX",         ServiceState::Unknown, ServiceState::Unknown},
+    {"postgres",     "PostgreSQL",         ServiceState::Unknown, ServiceState::Unknown},
+    {"qdrant",       "Qdrant",             ServiceState::Unknown, ServiceState::Unknown},
+    {"comfyui",      "ComfyUI",            ServiceState::Unknown, ServiceState::Unknown},
+    {"radio",        "RADIO",              ServiceState::Unknown, ServiceState::Unknown},
+    {"ups_guardian", "UPS Guardian",       ServiceState::Unknown, ServiceState::Unknown},
+    {"ups_rm",       "UPS / RM",           ServiceState::Unknown, ServiceState::Unknown},
+    {"hermes",       "Hermes",             ServiceState::Unknown, ServiceState::Unknown},
+    {"magazyn_web",  "Magazyn WebGUI",     ServiceState::Unknown, ServiceState::Unknown},
+    {"magazyn_bot",  "Magazyn Telegram",   ServiceState::Unknown, ServiceState::Unknown},
+};
+constexpr size_t AI_SERVICE_COUNT = sizeof(aiServices) / sizeof(aiServices[0]);
+bool serviceRowsPainted = false;
+bool serviceApiChecked = false;
+bool serviceApiAvailable = false;
+
+void pollPlatformServices() {
+    serviceApiChecked = true;
+    serviceApiAvailable = false;
+    ServiceState next[AI_SERVICE_COUNT]{};
+    for (size_t i = 0; i < AI_SERVICE_COUNT; ++i) next[i] = ServiceState::Unknown;
+
+    if (connected()) {
+        NetworkClient client;
+        HTTPClient http;
+        http.setConnectTimeout(1000);
+        http.setTimeout(3500);
+        if (http.begin(client, String(SERVICES_URL))) {
+            if (http.GET() == 200) {
+                String body = http.getString();
+                bool complete = true;
+                for (size_t i = 0; i < AI_SERVICE_COUNT; ++i) {
+                    const String target = String(aiServices[i].id) + "=";
+                    int index = body.indexOf(target);
+                    if (index > 0 && body[index - 1] != '\n') index = -1;
+                    if (index < 0) { complete = false; break; }
+                    const int valueBegin = index + target.length();
+                    int end = body.indexOf('\n', valueBegin);
+                    if (end < 0) end = body.length();
+                    String value = body.substring(valueBegin, end);
+                    value.trim();
+                    if (value == "running") next[i] = ServiceState::Running;
+                    else if (value == "stopped") next[i] = ServiceState::Stopped;
+                    else if (value == "unknown") next[i] = ServiceState::Unknown;
+                    else { complete = false; break; }
+                }
+                serviceApiAvailable = complete;
+            }
+            http.end();
+        }
+    }
+    for (size_t i = 0; i < AI_SERVICE_COUNT; ++i)
+        aiServices[i].state = serviceApiAvailable ? next[i] : ServiceState::Unknown;
+}
+
 void pollAiBridge() {
     aiBridgeChecked = true;
     aiBridgeOk = false;
@@ -302,47 +371,38 @@ void progressBar(int x, int y, int width, int pct, uint16_t color) {
 }
 // AI Platform page: only fields actually reported by GET /health.
 // Separate tiles do not imply that a not-checked Ollama component is healthy.
+// Flat industrial HMI list: static labels plus differential status updates.
 void drawOverviewValues() {
-    valueAt(57, 154, 540, 65,
-        aiBridgeChecked ? (aiBridgeOk ? "ONLINE" : "OFFLINE") : "SPRAWDZANIE",
-        aiBridgeOk ? UI_GOOD : UI_WARNING, 4);
-    valueAt(675, 154, 535, 65, aiBridgeOk ? String("v") + aiBridgeVersion : "--",
-            UI_WHITE, 3);
-    valueAt(57, 440, 540, 58,
-        aiBridgeOk ? aiDatabaseState : "--",
-        aiDatabaseState == "ok" ? UI_GOOD : UI_WARNING, 3);
-    valueAt(675, 440, 535, 58,
-        aiBridgeOk ? (aiOllamaState == "not_checked" ?
-            "NIE SPRAWDZONO" : aiOllamaState) : "--",
-        UI_WHITE, 2);
+    for (size_t i = 0; i < AI_SERVICE_COUNT; ++i) {
+        ServiceRow &service = aiServices[i];
+        if (serviceRowsPainted && service.state == service.lastDrawn) continue;
+        const int y = 88 + static_cast<int>(i) * 39;
+        M5.Display.fillRect(948, y + 3, 283, 31, UI_BG);
+        uint16_t color = UI_MUTED;
+        const char* stateText = "BRAK DANYCH";
+        if (service.state == ServiceState::Running) {
+            color = UI_GOOD;
+            stateText = "URUCHOMIONA";
+        } else if (service.state == ServiceState::Stopped) {
+            color = UI_WARNING;
+            stateText = "ZATRZYMANA";
+        }
+        M5.Display.fillCircle(967, y + 17, 6, color);
+        uiText(994, y + 9, stateText, color, 2, UI_BG);
+        service.lastDrawn = service.state;
+    }
+    serviceRowsPainted = true;
 }
 void drawOverview() {
     tabShell("", 0);
-    panel(32, 24, 595, 265);
-    panel(651, 24, 597, 265);
-    panel(32, 308, 595, 266);
-    panel(651, 308, 597, 266);
-    uiText(57, 53, "AI PLATFORM", UI_WHITE, 3);
-    uiText(57, 105, "STAN POLACZENIA", UI_MUTED, 2);
-    rule(57, 246, 540);
-    uiText(57, 259, "Host: 192.168.1.100", UI_MUTED, 1);
-
-    uiText(675, 53, "AI BRIDGE", UI_WHITE, 3);
-    uiText(675, 105, "WERSJA API", UI_MUTED);
-    rule(675, 246, 535);
-    uiText(675, 259, "GET /health  |  HTTP 200", UI_MUTED, 1);
-
-    uiText(57, 337, "BAZA DANYCH", UI_WHITE, 3);
-    uiText(57, 391, "STAN Z API", UI_MUTED);
-    rule(57, 529, 540);
-    uiText(57, 540, "Wartosc zwracana przez AI Bridge", UI_MUTED, 1);
-
-    uiText(675, 337, "OLLAMA", UI_WHITE, 3);
-    uiText(675, 391, "KONTROLA KOMPONENTU", UI_MUTED);
-    rule(675, 529, 535);
-    uiText(675, 540, "Brak kontroli nie oznacza awarii", UI_MUTED, 1);
-
-    uiText(42, 590, "DANE: 192.168.1.100:8080/health", UI_MUTED, 2, UI_BG);
+    serviceRowsPainted = false;
+    uiText(42, 29, "USLUGI AI PLATFORM", UI_WHITE, 3, UI_BG);
+    M5.Display.drawFastHLine(40, 74, 1193, UI_BORDER);
+    for (size_t i = 0; i < AI_SERVICE_COUNT; ++i) {
+        const int y = 88 + static_cast<int>(i) * 39;
+        uiText(56, y + 9, aiServices[i].label, UI_WHITE, 2, UI_BG);
+        M5.Display.drawFastHLine(48, y + 37, 1181, UI_BORDER);
+    }
     drawOverviewValues();
 }
 // Eight aligned tiles; each live measurement has its own light graphite card.
@@ -479,7 +539,7 @@ void drawDashboardValues() {
 }
 void drawDashboard() { drawOverview(); }
 void refreshDashboard() {
-    if (page == Page::Dashboard) pollAiBridge();
+    if (page == Page::Dashboard) pollPlatformServices();
     else if (page == Page::NetworkInfo) pollNas();
     else if (page == Page::Power) pollUpsReadOnly();
     lastDashboardRefresh = millis();
