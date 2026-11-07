@@ -1,5 +1,24 @@
 # InfoTAB
 
+## v0.9.2 — lista UPS zamiast kafelków
+
+Ekran UPS ma teraz 9 pozycji: stan urządzenia, wejście, wyjście,
+częstotliwość, szacunkową moc wyjściową, baterię, obciążenie,
+czas podtrzymania i napięcie akumulatora. Nazwy po lewej,
+wartości po prawej. Odświeżanie różnicowe, bez migania.
+Nie zmieniano żadnych pozostałych modułów.
+
+Aktualizacja z v0.9/v0.9.1 przez dotychczasowe OTA bez hasła:
+
+```powershell
+git pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\upload-wifi-no-password-windows.ps1
+```
+
+Po kompilacji aktywuj odbiornik OTA na urządzeniu w USTAWIENIA
+i zatwierdź Enter w PowerShell. Build i test Tab5: **PENDING**.
+
+
 ## v0.9.1 — AI Platform: wyłącznie lista usług
 
 Zamiast kafelków i szczegółów API, ekran AI Platform wyświetla
