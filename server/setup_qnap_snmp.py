@@ -13,7 +13,7 @@ username = input("SNMPv3 QNAP username [infotab]: ").strip() or "infotab"
 if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", username):
     raise SystemExit("Invalid SNMPv3 username. Use 1-32 letters, digits, '-' or '_'.")
 auth = getpass("SNMPv3 authentication password (HMAC-SHA): ")
-priv = getpass("SNMPv3 encryption password (AES): ")
+priv = getpass("SNMPv3 privacy/encryption password (DES or AES): ")
 privacy_protocol = input("Privacy protocol [DES] (AES if NAS supports it): ").strip().lower() or "des"
 if privacy_protocol not in ("des", "aes"):
     raise SystemExit("Privacy protocol must be DES or AES.")
