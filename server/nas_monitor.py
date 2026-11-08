@@ -30,10 +30,13 @@ OIDS = {
     "uptime_ticks": "1.3.6.1.4.1.24681.1.3.4.0",
     "temp_cpu_c": "1.3.6.1.4.1.24681.1.3.5.0",
     "temp_system_c": "1.3.6.1.4.1.24681.1.3.6.0",
+    "disk_slots": "1.3.6.1.4.1.24681.1.3.10.0",
+    "fan_slots": "1.3.6.1.4.1.24681.1.3.14.0",
+    "volume_count": "1.3.6.1.4.1.24681.1.3.16.0",
 }
 KEYS = (
     "nas_state", "snmp_state", "cpu_pct", "ram_pct", "temp_cpu_c",
-    "temp_system_c", "disks", "raid", "free_gib", "fan_rpm",
+    "temp_system_c", "disks", "raid", "volumes", "free_gib", "fan_rpm",
     "uptime_days", "backup",
 )
 
@@ -44,7 +47,7 @@ def empty_snapshot() -> dict[str, str]:
         "snmp_state": "not_configured",
         "cpu_pct": "--", "ram_pct": "--",
         "temp_cpu_c": "--", "temp_system_c": "--",
-        "disks": "--", "raid": "--", "free_gib": "--",
+        "disks": "--", "raid": "--", "volumes": "--", "free_gib": "--",
         "fan_rpm": "--", "uptime_days": "--", "backup": "--",
     }
 
@@ -81,7 +84,7 @@ def load_snmp_config(path: Path = CONFIG_PATH) -> dict[str, str] | None:
     return result
 
 
-def convert_metrics(values: dict[str, int]) -> dict[str, str]:
+def convert_metrics(values: dict[str, int | str]) -> dict[str, str]:
     out: dict[str, str] = {}
     cpu = values.get("cpu_pct")
     if cpu is not None and 0 <= cpu <= 100:
@@ -94,9 +97,39 @@ def convert_metrics(values: dict[str, int]) -> dict[str, str]:
         if val is not None and -20 <= val <= 125:
             out[key] = str(val)
     ticks = values.get("uptime_ticks")
-    if ticks is not None and ticks >= 0:
-        # SNMP TimeTicks units: 1/100s.
+    if isinstance(ticks, int) and ticks >= 0:
+        # QNAP system uptime (different from SNMP agent uptime), TimeTicks = 1/100 s.
         out["uptime_days"] = str(ticks // (100 * 86400))
+
+    # QNAP hdStatusEX: ready=0, noDisk=-5, invalid=-6, rwError=-9, unknown=-4.
+    # 'READY' does not imply SMART is healthy; never claim an exhaustive SMART test.
+    slots = values.get("disk_slots")
+    if isinstance(slots, int) and 0 < slots <= 16:
+        states = [values.get(f"disk_status_{i}") for i in range(1, slots + 1)]
+        if all(isinstance(v, int) for v in states):
+            inserted = [v for v in states if v != -5]
+            if inserted:
+                ready = sum(v == 0 for v in inserted)
+                out["disks"] = f"{ready}/{len(inserted)} GOTOWE"
+
+    volumes = values.get("volume_count")
+    if isinstance(volumes, int) and 0 < volumes <= 16:
+        statuses = [values.get(f"volume_status_{i}") for i in range(1, volumes + 1)]
+        if all(isinstance(v, str) and v.strip() for v in statuses):
+            ready = sum(v.strip().casefold() == "ready" for v in statuses)
+            out["volumes"] = f"{ready}/{volumes} READY"
+
+        free_kib = [values.get(f"volume_free_kib_{i}") for i in range(1, volumes + 1)]
+        if all(isinstance(v, int) and v >= 0 for v in free_kib):
+            # This particular QTS NAS returned KiB despite MIB's 'byte' description.
+            # Verified against textual legacy QTS values (273.62 GB / 7.05 TB).
+            out["free_gib"] = str(round(sum(free_kib) / (1024 * 1024)))
+
+    fans = values.get("fan_slots")
+    if isinstance(fans, int) and 0 < fans <= 8:
+        rpm = [values.get(f"fan_rpm_{i}") for i in range(1, fans + 1)]
+        if all(isinstance(v, int) and 0 <= v <= 30000 for v in rpm):
+            out["fan_rpm"] = "/".join(str(x) for x in rpm)
     return out
 
 
@@ -109,7 +142,8 @@ async def read_snmpv3(config: dict[str, str]) -> dict[str, int]:
 
     engine = SnmpEngine()
     try:
-        target = await UdpTransportTarget.create((NAS_HOST, 161), timeout=1, retries=0)
+        # QNAP SHA/DES SNMPv3 discovery may exceed 1s on a fresh engine.
+        target = await UdpTransportTarget.create((NAS_HOST, 161), timeout=2.5, retries=0)
         auth = UsmUserData(
             userName=config["username"],
             authKey=config["auth_password"],
@@ -124,12 +158,41 @@ async def read_snmpv3(config: dict[str, str]) -> dict[str, int]:
         )
         if error or error_status:
             return {}
-        values = {}
+        values: dict[str, int | str] = {}
         for key, (_, value) in zip(OIDS, varbinds):
             try:
                 values[key] = int(value)
-            except Exception:
+            except (ValueError, TypeError):
                 continue
+
+        # Read only fixed, known health/status and counter OIDs. Never fetch
+        # serial numbers, share names, disk models, or QTS credentials.
+        extended: dict[str, str] = {}
+        for i in range(1, min(values.get("disk_slots", 0), 16) + 1):
+            extended[f"disk_status_{i}"] = f"1.3.6.1.4.1.24681.1.3.11.1.4.{i}"
+        for i in range(1, min(values.get("volume_count", 0), 16) + 1):
+            extended[f"volume_free_kib_{i}"] = f"1.3.6.1.4.1.24681.1.3.17.1.5.{i}"
+            extended[f"volume_status_{i}"] = f"1.3.6.1.4.1.24681.1.3.17.1.6.{i}"
+        for i in range(1, min(values.get("fan_slots", 0), 8) + 1):
+            extended[f"fan_rpm_{i}"] = f"1.3.6.1.4.1.24681.1.3.15.1.3.{i}"
+
+        if extended:
+            err2, status2, _, rows = await get_cmd(
+                engine, auth, target, ContextData(),
+                *(ObjectType(ObjectIdentity(oid)) for oid in extended.values()),
+            )
+            if not err2 and not status2:
+                for key, (_, value) in zip(extended, rows):
+                    if key.startswith("volume_status_"):
+                        # Only bounded status strings; do not return volume names.
+                        raw = str(value).strip()
+                        if raw and len(raw) <= 64:
+                            values[key] = raw
+                    else:
+                        try:
+                            values[key] = int(value)
+                        except (ValueError, TypeError):
+                            continue
         return values
     finally:
         engine.close_dispatcher()
@@ -156,7 +219,7 @@ class NasMonitor:
         if config is None:
             return result
         try:
-            metrics = asyncio.run(asyncio.wait_for(read_snmpv3(config), timeout=3))
+            metrics = asyncio.run(asyncio.wait_for(read_snmpv3(config), timeout=5.5))
         except (OSError, ImportError, ValueError, RuntimeError, asyncio.TimeoutError):
             metrics = {}
         if not metrics:

@@ -70,16 +70,16 @@ bool aiBridgeChecked = false;
 String aiBridgeVersion = "--";
 String aiDatabaseState = "--";
 String aiOllamaState = "--";
-static constexpr size_t NAS_ROW_COUNT = 12;
+static constexpr size_t NAS_ROW_COUNT = 13;
 const char* nasMetricKeys[NAS_ROW_COUNT] = {
     "nas_state", "snmp_state", "cpu_pct", "ram_pct",
-    "temp_cpu_c", "temp_system_c", "disks", "raid",
+    "temp_cpu_c", "temp_system_c", "disks", "raid", "volumes",
     "free_gib", "fan_rpm", "uptime_days", "backup"
 };
 const char* nasMetricLabels[NAS_ROW_COUNT] = {
     "Stan NAS", "Odczyt SNMP", "Obciazenie CPU", "Zajetosc RAM",
-    "Temperatura CPU", "Temperatura systemu", "Stan dyskow", "Stan RAID",
-    "Wolne miejsce", "Wentylator", "Czas pracy", "Backup"
+    "Temperatura CPU", "Temperatura systemu", "Dyski (status QTS)", "Stan RAID",
+    "Stan wolumenow", "Wolne miejsce", "Wentylatory", "Czas pracy", "Backup"
 };
 String nasMetricValues[NAS_ROW_COUNT];
 String nasLastDisplayed[NAS_ROW_COUNT];
@@ -293,7 +293,7 @@ void pollNas() {
     NetworkClient client;
     HTTPClient http;
     http.setConnectTimeout(1000);
-    http.setTimeout(4000);
+    http.setTimeout(7000);
     if (!http.begin(client, String(NAS_URL))) return;
     if (http.GET() == 200) {
         const String body = http.getString();
@@ -526,15 +526,23 @@ void drawNetworkValues() {
             else { value = "BRAK ODCZYTU"; color = UI_WARNING; }
         } else if (value == "--") {
             color = UI_MUTED;
+        } else if (i == 6 || i == 8) {
+            const int slash = value.indexOf('/');
+            const int space = value.indexOf(' ');
+            if (slash > 0 && space > slash + 1) {
+                const int good = value.substring(0, slash).toInt();
+                const int total = value.substring(slash + 1, space).toInt();
+                color = total > 0 && good == total ? UI_GOOD : UI_WARNING;
+            }
         } else if (i == 2 || i == 3) value += "%";
         else if (i == 4 || i == 5) value += " C";
-        else if (i == 8) value += " GiB";
-        else if (i == 9) value += " RPM";
-        else if (i == 10) value += " dni";
+        else if (i == 9) value += " GiB";
+        else if (i == 10) value += " RPM";
+        else if (i == 11) value += " dni";
 
         if (nasRowsPainted && value == nasLastDisplayed[i] &&
             color == nasLastDisplayColor[i]) continue;
-        const int y = 86 + static_cast<int>(i) * 42;
+        const int y = 86 + static_cast<int>(i) * 40;
         M5.Display.fillRect(901, y + 3, 328, 31, UI_BG);
         M5.Display.fillCircle(919, y + 18, 5, color);
         uiText(942, y + 8, value, color, 2, UI_BG);
@@ -549,7 +557,7 @@ void drawNetwork() {
     uiText(42, 29, "PARAMETRY NAS", UI_WHITE, 3, UI_BG);
     M5.Display.drawFastHLine(40, 74, 1193, UI_BORDER);
     for (size_t i = 0; i < NAS_ROW_COUNT; ++i) {
-        const int y = 86 + static_cast<int>(i) * 42;
+        const int y = 86 + static_cast<int>(i) * 40;
         uiText(56, y + 8, nasMetricLabels[i], UI_WHITE, 2, UI_BG);
         M5.Display.drawFastHLine(48, y + 39, 1181, UI_BORDER);
     }

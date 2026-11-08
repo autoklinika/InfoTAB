@@ -9,14 +9,15 @@
 
 ## Stan implementacji
 
-Backend wdrożony na AI Platform i zweryfikowany; `/nas` zwraca aktualnie
-`nas_state=online`, `snmp_state=not_configured`. Nie ma jeszcze uwierzytelnionych
-odczytów SNMP. Firmware: PlatformIO build PASS (1 008 976 B, limit slotu OTA 1 310 720 B).
-Wgranie na fizyczny Tab5 i test dotyku: PENDING.
+Backend wdrożony na AI Platform i zweryfikowany. SNMPv3 HMAC-SHA + CBC-DES
+autoryzowany; potwierdzono rzeczywiste pomiary CPU, RAM, temperatur, czterech
+dysków `ready`, dwóch wolumenów `Ready`, 2 wentylatorów i wolnej przestrzeni.
+Firmware: PlatformIO BUILD PASS po rozszerzeniu do 13 wierszy (1 009 168 B, slot OTA 1 310 720 B); wgranie
+na fizyczny Tab5 i test dotyku: PENDING.
 
-Dane o dyskach, RAID, przestrzeni, wentylatorach oraz backupach domyślnie `--`.
-Nie przypisujemy statusu OK urządzeniom lub backupom, których nie zweryfikowaliśmy.
-Dotychczasowy odczyt NAS (same porty) zostaje zastąpiony listą 12 pozycji.
+`raid` i `backup` pozostają `--` do niezależnego potwierdzenia ich
+rzeczywistych stanów. `Ready` wolumenów nie stanowi potwierdzenia RAID
+Healthy ani poprawnego SMART. Brak portu oznacza offline, brak metryki oznacza `--`.
 
 ## API
 
@@ -25,16 +26,17 @@ ma format `key=value`, stały zestaw kluczy:
 
 ```text
 nas_state=online
-snmp_state=not_configured
-cpu_pct=--
-ram_pct=--
-temp_cpu_c=--
-temp_system_c=--
-disks=--
+snmp_state=ok
+cpu_pct=1
+ram_pct=29
+temp_cpu_c=31
+temp_system_c=20
+disks=4/4 GOTOWE
 raid=--
-free_gib=--
-fan_rpm=--
-uptime_days=--
+volumes=2/2 READY
+free_gib=7490
+fan_rpm=548/547
+uptime_days=2
 backup=--
 ```
 
@@ -91,3 +93,11 @@ Backup kodu i unit:
 `~/.local/share/infotab-services-api/backups/20261108-nas-api/`.
 Do rollbacku przywrócić oba pliki i zrestartować wyłącznie
 `systemctl --user restart infotab-services-api.service`.
+
+## Zweryfikowane OID i skale (QNAP 2026-11-08)
+
+- systemInfoEX `1.3.6.1.4.1.24681.1.3.1..6.0`: CPU, RAM, uptime, temperatury.
+- Dyski `1.3.6.1.4.1.24681.1.3.11.1.4.*`: stan 0 = ready, -5 = no disk; nie jest to niezależny test SMART.
+- Wolumeny `1.3.6.1.4.1.24681.1.3.17.1.5.*`, `...1.6.*`: wolna przestrzeń i status. Zmierzona skala liczby odpowiada KiB, pomimo opisu 'byte' w starym MIB; zestawiono z legacy formatem `273.62 GB` i `7.05 TB`.
+- Wentylatory `1.3.6.1.4.1.24681.1.3.15.1.3.*`: RPM.
+- `raid`, `backup` — brak autorytatywnych odczytów, pozostają nieznane.
