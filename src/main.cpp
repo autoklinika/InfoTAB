@@ -37,6 +37,7 @@ constexpr uint32_t HOME_REFRESH_MS = 5000;
 constexpr uint32_t DASH_REFRESH_MS = 8000;
 constexpr const char* BRIDGE_HEALTH = "http://192.168.1.100:8080/health";
 constexpr const char* SERVICES_URL = "http://192.168.1.100:18092/services";
+constexpr const char* NAS_URL = "http://192.168.1.100:18092/nas";
 
 enum class Page { Dashboard, Power, NetworkInfo, Service, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
 struct NetworkEntry {
@@ -69,10 +70,22 @@ bool aiBridgeChecked = false;
 String aiBridgeVersion = "--";
 String aiDatabaseState = "--";
 String aiOllamaState = "--";
-bool nasChecked = false;
-bool nasHttps = false;
-bool nasQts = false;
-uint32_t nasLastSuccessAt = 0;
+static constexpr size_t NAS_ROW_COUNT = 12;
+const char* nasMetricKeys[NAS_ROW_COUNT] = {
+    "nas_state", "snmp_state", "cpu_pct", "ram_pct",
+    "temp_cpu_c", "temp_system_c", "disks", "raid",
+    "free_gib", "fan_rpm", "uptime_days", "backup"
+};
+const char* nasMetricLabels[NAS_ROW_COUNT] = {
+    "Stan NAS", "Odczyt SNMP", "Obciazenie CPU", "Zajetosc RAM",
+    "Temperatura CPU", "Temperatura systemu", "Stan dyskow", "Stan RAID",
+    "Wolne miejsce", "Wentylator", "Czas pracy", "Backup"
+};
+String nasMetricValues[NAS_ROW_COUNT];
+String nasLastDisplayed[NAS_ROW_COUNT];
+uint16_t nasLastDisplayColor[NAS_ROW_COUNT]{};
+bool nasRowsPainted = false;
+bool nasApiAvailable = false;
 
 
 struct UpsData {
@@ -270,18 +283,42 @@ void pollAiBridge() {
     }
 }
 
-// Only reachability checks. Do not pretend they are QNAP storage/backup health.
+// Read-only fixed-key NAS data from AI Platform. No QNAP credentials on Tab5.
+// Unknown metrics stay "--"; API failure is not interpreted as NAS failure.
 void pollNas() {
-    nasChecked = true;
-    nasHttps = false;
-    nasQts = false;
+    nasApiAvailable = false;
+    for (size_t i = 0; i < NAS_ROW_COUNT; ++i) nasMetricValues[i] = "--";
     if (!connected()) return;
+
     NetworkClient client;
-    nasHttps = client.connect("192.168.1.101", 443, 850);
-    client.stop();
-    nasQts = client.connect("192.168.1.101", 8080, 850);
-    client.stop();
-    if (nasHttps || nasQts) nasLastSuccessAt = millis();
+    HTTPClient http;
+    http.setConnectTimeout(1000);
+    http.setTimeout(4000);
+    if (!http.begin(client, String(NAS_URL))) return;
+    if (http.GET() == 200) {
+        const String body = http.getString();
+        bool complete = body.length() > 0 && body.length() < 2048;
+        if (complete) {
+            for (size_t i = 0; i < NAS_ROW_COUNT; ++i) {
+                const String target = String(nasMetricKeys[i]) + "=";
+                int start = body.indexOf(target);
+                if (start > 0 && body[start - 1] != '\n') start = -1;
+                if (start < 0) { complete = false; break; }
+                const int valueStart = start + target.length();
+                int lineEnd = body.indexOf('\n', valueStart);
+                if (lineEnd < 0) lineEnd = body.length();
+                if (lineEnd - valueStart > 45) { complete = false; break; }
+                String value = body.substring(valueStart, lineEnd);
+                value.trim();
+                nasMetricValues[i] = value.length() ? value : "--";
+            }
+        }
+        nasApiAvailable = complete;
+    }
+    http.end();
+    if (!nasApiAvailable) {
+        for (size_t i = 0; i < NAS_ROW_COUNT; ++i) nasMetricValues[i] = "--";
+    }
 }
 
 // Static screen elements are drawn only when navigating to this page.
@@ -471,47 +508,51 @@ void drawPower() {
     drawPowerValues();
 }
 
+// NAS: flat high-contrast list, differential repaints only.
 void drawNetworkValues() {
-    const bool online = nasChecked && (nasHttps || nasQts);
-    valueAt(58, 145, 540, 64,
-            !nasChecked ? "SPRAWDZANIE" : (online ? "DOSTEPNY" : "NIEDOSTEPNY"),
-            online ? UI_GOOD : UI_WARNING, 4);
-    valueAt(675, 145, 535, 64,
-            !nasChecked ? "--" : (nasQts ? "TCP 8080  OK" : "BRAK POLACZENIA"),
-            nasQts ? UI_GOOD : UI_WARNING, 3);
-    valueAt(58, 429, 540, 64,
-            !nasChecked ? "--" : (nasHttps ? "TCP 443  OK" : "BRAK POLACZENIA"),
-            nasHttps ? UI_GOOD : UI_WARNING, 3);
-    valueAt(675, 429, 535, 64, "BRAK DANYCH API", UI_MUTED, 3);
+    for (size_t i = 0; i < NAS_ROW_COUNT; ++i) {
+        String value = nasMetricValues[i];
+        uint16_t color = UI_WHITE;
+        if (!nasApiAvailable) {
+            value = i == 0 ? "BRAK API" : "--";
+            color = UI_MUTED;
+        } else if (i == 0) {
+            color = value == "online" ? UI_GOOD : UI_WARNING;
+            value = value == "online" ? "ONLINE" : "OFFLINE";
+        } else if (i == 1) {
+            if (value == "ok") { value = "AKTYWNY"; color = UI_GOOD; }
+            else if (value == "not_configured") { value = "DO KONFIGURACJI"; color = UI_WARNING; }
+            else if (value == "config_error") { value = "BLAD KONFIG."; color = UI_WARNING; }
+            else { value = "BRAK ODCZYTU"; color = UI_WARNING; }
+        } else if (value == "--") {
+            color = UI_MUTED;
+        } else if (i == 2 || i == 3) value += "%";
+        else if (i == 4 || i == 5) value += " C";
+        else if (i == 8) value += " GiB";
+        else if (i == 9) value += " RPM";
+        else if (i == 10) value += " dni";
+
+        if (nasRowsPainted && value == nasLastDisplayed[i] &&
+            color == nasLastDisplayColor[i]) continue;
+        const int y = 86 + static_cast<int>(i) * 42;
+        M5.Display.fillRect(901, y + 3, 328, 31, UI_BG);
+        M5.Display.fillCircle(919, y + 18, 5, color);
+        uiText(942, y + 8, value, color, 2, UI_BG);
+        nasLastDisplayed[i] = value;
+        nasLastDisplayColor[i] = color;
+    }
+    nasRowsPainted = true;
 }
 void drawNetwork() {
     tabShell("", 1);
-    panel(32, 24, 595, 264);
-    panel(651, 24, 597, 264);
-    panel(32, 308, 595, 264);
-    panel(651, 308, 597, 264);
-    uiText(58, 54, "GLOBAL NAS", UI_WHITE, 3);
-    uiText(58, 100, "DOSTEPNOSC SIECIOWA", UI_MUTED);
-    rule(58, 246, 541);
-    uiText(58, 260, "IP: 192.168.1.101", UI_MUTED, 1);
-
-    uiText(675, 54, "PANEL QNAP", UI_WHITE, 3);
-    uiText(675, 100, "POLACZENIE TCP", UI_MUTED);
-    rule(675, 246, 535);
-    uiText(675, 260, "Port 8080  /  bez logowania", UI_MUTED, 1);
-
-    uiText(58, 338, "HTTPS", UI_WHITE, 3);
-    uiText(58, 386, "DOSTEPNOSC PORTU", UI_MUTED);
-    rule(58, 529, 541);
-    uiText(58, 541, "Port 443  /  bez pobierania danych", UI_MUTED, 1);
-
-    uiText(675, 338, "DYSKI / BACKUP", UI_WHITE, 3);
-    uiText(675, 386, "DANE WYMAGAJA QNAP API", UI_MUTED);
-    rule(675, 529, 535);
-    uiText(675, 541, "Nie pokazujemy nieznanych stanow", UI_MUTED, 1);
-
-    uiText(42, 590, "MONITORING SIECI NAS  /  brak danych o RAID i backupie",
-           UI_MUTED, 2, UI_BG);
+    nasRowsPainted = false;
+    uiText(42, 29, "PARAMETRY NAS", UI_WHITE, 3, UI_BG);
+    M5.Display.drawFastHLine(40, 74, 1193, UI_BORDER);
+    for (size_t i = 0; i < NAS_ROW_COUNT; ++i) {
+        const int y = 86 + static_cast<int>(i) * 42;
+        uiText(56, y + 8, nasMetricLabels[i], UI_WHITE, 2, UI_BG);
+        M5.Display.drawFastHLine(48, y + 39, 1181, UI_BORDER);
+    }
     drawNetworkValues();
 }
 // All configuration and maintenance actions are on this page.
