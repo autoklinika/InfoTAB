@@ -73,7 +73,12 @@ def load_snmp_config(path: Path = CONFIG_PATH) -> dict[str, str] | None:
         not isinstance(config.get(key), str) or not config[key] for key in required
     ):
         raise ValueError("SNMPv3 configuration incomplete")
-    return {key: config[key] for key in required}
+    result = {key: config[key] for key in required}
+    protocol = config.get("privacy_protocol", "des").lower()
+    if protocol not in ("des", "aes"):
+        raise ValueError("Unsupported SNMP privacy protocol")
+    result["privacy_protocol"] = protocol
+    return result
 
 
 def convert_metrics(values: dict[str, int]) -> dict[str, str]:
@@ -99,7 +104,7 @@ async def read_snmpv3(config: dict[str, str]) -> dict[str, int]:
     from pysnmp.hlapi.v3arch.asyncio import (
         SnmpEngine, UsmUserData, UdpTransportTarget, ContextData,
         ObjectType, ObjectIdentity, get_cmd,
-        usmHMACSHAAuthProtocol, usmAesCfb128Protocol,
+        usmHMACSHAAuthProtocol, usmAesCfb128Protocol, usmDESPrivProtocol,
     )
 
     engine = SnmpEngine()
@@ -110,7 +115,8 @@ async def read_snmpv3(config: dict[str, str]) -> dict[str, int]:
             authKey=config["auth_password"],
             privKey=config["priv_password"],
             authProtocol=usmHMACSHAAuthProtocol,
-            privProtocol=usmAesCfb128Protocol,
+            privProtocol=(usmDESPrivProtocol if config["privacy_protocol"] == "des"
+                          else usmAesCfb128Protocol),
         )
         error, error_status, _, varbinds = await get_cmd(
             engine, auth, target, ContextData(),

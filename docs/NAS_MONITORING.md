@@ -48,7 +48,7 @@ Panel sterowania → Sieć i usługi plików → SNMP.
 1. Włącz usługę SNMP, port UDP 161.
 2. Wybierz SNMP V3, użytkownik `infotab`.
 3. Włącz uwierzytelnianie **HMAC-SHA** (8–64 znaków ASCII).
-4. Włącz szyfrowanie/prywatność **AES** (osobne hasło, 8–64 znaków ASCII).
+4. Włącz szyfrowanie/prywatność **CBC-DES** (zgodnie z ograniczeniem aktualnego panelu QTS; osobne hasło, 8–64 znaków ASCII). DES jest przestarzały kryptograficznie; SNMP ograniczamy wyłącznie do lokalnej sieci LAN. Jeśli NAS udostępnia AES, preferujemy AES.
 5. Zapisz. Jeżeli dostępna jest lista dozwolonych źródeł, dopuść
    `192.168.1.100` (Minisforum); **nie przekierowuj UDP 161 na Internet**.
 6. Pobierz `NAS.mib` z QTS — jest niezbędny do zweryfikowania OID w danej
@@ -63,6 +63,7 @@ python3 /home/harrypotter/.local/share/infotab-services-api/setup_qnap_snmp.py
 Hasła są ukryte podczas wpisywania i zapisane do
 `~/.config/infotab/nas-snmp.json` z uprawnieniami 0600.
 Backend korzysta z `pysnmp` 7.1.32 w prywatnym venv.
+W skrypcie wybierz `DES` (wartość domyślna) przy panelu QTS z `CBC-DES`; wybór `AES` jest przeznaczony dla QNAP, na którym faktycznie udostępniono AES. Uwierzytelnianie pozostaje HMAC-SHA.
 Hasła nie są częścią firmware, odpowiedzi HTTP ani repo.
 
 W tej chwili collector używa tylko potwierdzonych w starszym

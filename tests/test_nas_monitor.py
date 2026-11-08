@@ -25,6 +25,13 @@ class NasTests(unittest.TestCase):
             with self.assertRaises(ValueError): mon.load_snmp_config(path)
             os.chmod(path,0o600)
             self.assertEqual(mon.load_snmp_config(path)["username"],"infotab")
+            self.assertEqual(mon.load_snmp_config(path)["privacy_protocol"],"des")
+            cfg=json.loads(path.read_text()); cfg["privacy_protocol"]="aes"
+            path.write_text(json.dumps(cfg)); os.chmod(path,0o600)
+            self.assertEqual(mon.load_snmp_config(path)["privacy_protocol"],"aes")
+            cfg["privacy_protocol"]="not-safe"
+            path.write_text(json.dumps(cfg)); os.chmod(path,0o600)
+            with self.assertRaises(ValueError): mon.load_snmp_config(path)
     def test_contract(self):
         self.assertEqual(len(mon.KEYS),12)
         self.assertEqual(tuple(mon.empty_snapshot()),mon.KEYS)
