@@ -8,6 +8,7 @@ Unknown measurements are returned as '--' rather than fabricated.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ import time
 NAS_HOST = "192.168.1.101"
 CONFIG_PATH = Path.home() / ".config/infotab/nas-snmp.json"
 TTL_SECONDS = 20.0
+STAGE_K_STATUS_ROOT = Path("/srv/ai-data/platform/backup-status/stage-k")
 
 # Read-only QNAP NAS-MIB (legacy 24681 systemInfoEx); validate against
 # NAS.mib downloaded from the running NAS before claiming full coverage.
@@ -33,6 +35,7 @@ OIDS = {
     "disk_slots": "1.3.6.1.4.1.24681.1.3.10.0",
     "fan_slots": "1.3.6.1.4.1.24681.1.3.14.0",
     "volume_count": "1.3.6.1.4.1.24681.1.3.16.0",
+    "raid_count": "1.3.6.1.4.1.24681.1.4.1.1.1.2.1.1.0",
 }
 KEYS = (
     "nas_state", "snmp_state", "cpu_pct", "ram_pct", "temp_cpu_c",
@@ -125,12 +128,71 @@ def convert_metrics(values: dict[str, int | str]) -> dict[str, str]:
             # Verified against textual legacy QTS values (273.62 GB / 7.05 TB).
             out["free_gib"] = str(round(sum(free_kib) / (1024 * 1024)))
 
+    raids = values.get("raid_count")
+    if isinstance(raids, int) and 0 < raids <= 16:
+        statuses = [values.get(f"raid_status_{i}") for i in range(1, raids + 1)]
+        if all(isinstance(v, str) and v.strip() for v in statuses):
+            ready = sum(v.strip().casefold() == "ready" for v in statuses)
+            out["raid"] = f"{ready}/{raids} READY"
+
     fans = values.get("fan_slots")
     if isinstance(fans, int) and 0 < fans <= 8:
         rpm = [values.get(f"fan_rpm_{i}") for i in range(1, fans + 1)]
         if all(isinstance(v, int) and 0 <= v <= 30000 for v in rpm):
             out["fan_rpm"] = "/".join(str(x) for x in rpm)
     return out
+
+
+def read_ai_backup_state(
+    status_root: Path = STAGE_K_STATUS_ROOT,
+    now: datetime | None = None,
+) -> str:
+    """State of AI Platform Stage K backups ON GlobalNAS, not QNAP HBS jobs.
+
+    Refuse PASS when a monitor is stale, daily/weekly reports are missing or
+    unsuccessful. Only read monitor outputs; do not mount or access the NAS.
+    """
+    now = now or datetime.now(timezone.utc)
+    def report(filename: str) -> dict[str, object] | None:
+        path = status_root / filename
+        try:
+            if path.stat().st_size > 65536:
+                return None
+            obj = json.loads(path.read_text(encoding="utf-8"))
+            return obj if isinstance(obj, dict) else None
+        except (OSError, ValueError, UnicodeError):
+            return None
+
+    def recent(value: object, max_age_hours: float) -> bool:
+        if not isinstance(value, str):
+            return False
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                return False
+            hours = (now - dt).total_seconds() / 3600
+            return -0.1 <= hours <= max_age_hours
+        except ValueError:
+            return False
+
+    monitor = report("monitor.json")
+    daily = report("daily.json")
+    weekly = report("weekly.json")
+    if not all((monitor, daily, weekly)):
+        return "--"
+
+    # Any explicit FAIL should override historical successful backups.
+    if any(d.get("status") != "PASS" for d in (monitor, daily, weekly)):
+        return "AI STAGE K: ALARM"
+
+    if monitor.get("issues"):
+        return "AI STAGE K: ALARM"
+
+    if not (recent(monitor.get("checked_at"), 3)
+            and recent(daily.get("completed_at"), 36)
+            and recent(weekly.get("completed_at"), 24 * 8)):
+        return "AI STAGE K: NIEAKTUALNY"
+    return "AI STAGE K: OK"
 
 
 async def read_snmpv3(config: dict[str, str]) -> dict[str, int]:
@@ -175,6 +237,8 @@ async def read_snmpv3(config: dict[str, str]) -> dict[str, int]:
             extended[f"volume_status_{i}"] = f"1.3.6.1.4.1.24681.1.3.17.1.6.{i}"
         for i in range(1, min(values.get("fan_slots", 0), 8) + 1):
             extended[f"fan_rpm_{i}"] = f"1.3.6.1.4.1.24681.1.3.15.1.3.{i}"
+        for i in range(1, min(values.get("raid_count", 0), 16) + 1):
+            extended[f"raid_status_{i}"] = f"1.3.6.1.4.1.24681.1.4.1.1.1.2.1.2.1.5.{i}"
 
         if extended:
             err2, status2, _, rows = await get_cmd(
@@ -183,8 +247,8 @@ async def read_snmpv3(config: dict[str, str]) -> dict[str, int]:
             )
             if not err2 and not status2:
                 for key, (_, value) in zip(extended, rows):
-                    if key.startswith("volume_status_"):
-                        # Only bounded status strings; do not return volume names.
+                    if key.startswith(("volume_status_", "raid_status_")):
+                        # Only bounded status strings; no volume labels or RAID identifiers.
                         raw = str(value).strip()
                         if raw and len(raw) <= 64:
                             values[key] = raw
@@ -211,6 +275,7 @@ class NasMonitor:
             result["snmp_state"] = "unavailable"
             return result
         result["nas_state"] = "online"
+        result["backup"] = read_ai_backup_state()
         try:
             config = load_snmp_config()
         except (OSError, ValueError, json.JSONDecodeError):

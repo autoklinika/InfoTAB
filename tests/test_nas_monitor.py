@@ -1,4 +1,5 @@
 import json, os, sys, tempfile, unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
@@ -35,6 +36,35 @@ class NasTests(unittest.TestCase):
         self.assertEqual(mon.convert_metrics(sample)["disks"],"3/4 GOTOWE")
         sample["volume_status_2"]="Degraded"
         self.assertEqual(mon.convert_metrics(sample)["volumes"],"1/2 READY")
+    def test_raid_ready_and_degraded(self):
+        d={"raid_count":2,"raid_status_1":"Ready","raid_status_2":"Ready"}
+        self.assertEqual(mon.convert_metrics(d)["raid"],"2/2 READY")
+        d["raid_status_2"]="Degraded"
+        self.assertEqual(mon.convert_metrics(d)["raid"],"1/2 READY")
+        d["raid_status_2"]=""
+        self.assertNotIn("raid",mon.convert_metrics(d))
+        d["raid_count"]=0
+        self.assertNotIn("raid",mon.convert_metrics(d))
+
+    def test_stage_k_reports_fresh_fail_stale_missing(self):
+        now=datetime(2026,11,9,8,30,tzinfo=timezone.utc)
+        def iso(hours): return (now-timedelta(hours=hours)).isoformat()
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            def write(file,data):
+                (root/file).write_text(json.dumps(data),encoding="utf-8")
+            write("monitor.json",{"status":"PASS","checked_at":iso(0.5),"issues":[]})
+            write("daily.json",{"status":"PASS","completed_at":iso(6)})
+            write("weekly.json",{"status":"PASS","completed_at":iso(29)})
+            self.assertEqual(mon.read_ai_backup_state(root,now),"AI STAGE K: OK")
+            write("weekly.json",{"status":"FAIL","completed_at":iso(29)})
+            self.assertEqual(mon.read_ai_backup_state(root,now),"AI STAGE K: ALARM")
+            write("weekly.json",{"status":"PASS","completed_at":iso(29)})
+            write("monitor.json",{"status":"PASS","checked_at":iso(5),"issues":[]})
+            self.assertEqual(mon.read_ai_backup_state(root,now),"AI STAGE K: NIEAKTUALNY")
+            (root/"daily.json").unlink()
+            self.assertEqual(mon.read_ai_backup_state(root,now),"--")
+
     def test_config_mode(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/"secret.json"
