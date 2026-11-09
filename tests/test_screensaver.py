@@ -1,4 +1,4 @@
-"""InfoTAB v0.9.8 animated saver: screen and touch invariants.
+"""InfoTAB v0.9.9 animated saver: screen, toggle and touch invariants.
 
 Hardware animation and display brightness still require a real Tab5
 OTA acceptance test. These source-level checks prevent common regressions.
@@ -48,15 +48,45 @@ class AnimatedSaverTests(unittest.TestCase):
         self.assertIn("M5.Display.setBrightness(saverPreviousBrightness);", SRC)
         self.assertNotIn("M5.Display.setBrightness(0);", SRC)
 
-    def test_manual_preview_and_auto_idle_are_ota_safe(self):
-        self.assertIn('"URUCHOM WYGASZACZ"', SRC)
+    def test_switch_and_auto_idle_are_ota_safe(self):
+        self.assertIn('"WYGASZACZ"', SRC)
+        self.assertIn('const char* label = saverEnabled ? "ON" : "OFF";', SRC)
         self.assertIn('inside(x, y, 57, 519, 540, 48)', SRC)
-        self.assertIn("if (!otaArmed && !otaInProgress) startScreensaver();", SRC)
+        self.assertIn("if (!otaArmed && !otaInProgress) {", SRC)
+        self.assertIn("const bool enabled = !saverEnabled;", SRC)
+        self.assertIn("if (saveSaverEnabled(enabled)) {", SRC)
+        self.assertIn("saverEnabled = enabled;", SRC)
+        self.assertIn("saverLastInteractionAt = millis();", SRC)
         self.assertRegex(SRC, re.compile(
-            r"if \(mainPage\(page\) && !otaArmed && !otaInProgress &&"
+            r"if \(saverEnabled && mainPage\(page\) &&"
+            r" !otaArmed && !otaInProgress &&"
             r"\s*!touch\.isPressed\(\) &&"
             r"\s*millis\(\) - saverLastInteractionAt >= SAVER_IDLE_MS\)", re.S))
-        self.assertIn("if (saverActive || otaArmed || otaInProgress) return;", SRC)
+        self.assertIn("if (!saverEnabled || saverActive || otaArmed || otaInProgress) return;", SRC)
+
+    def test_switch_is_persistent_and_separate_from_wifi(self):
+        self.assertIn('prefs.begin("infotab_ui", true)', SRC)
+        self.assertIn('prefs.begin("infotab_ui", false)', SRC)
+        self.assertIn('prefs.getBool("saver_on", true)', SRC)
+        self.assertIn('prefs.putBool("saver_on", enabled)', SRC)
+        self.assertIn("loadSaverEnabled();", SRC)
+        self.assertIn("readSaved();", SRC)
+        self.assertLess(SRC.index("loadSaverEnabled();", SRC.index("void setup()")),
+                        SRC.index("render();", SRC.index("void setup()")))
+
+    def test_moving_infotab_wordmark_not_static(self):
+        self.assertIn('static constexpr const char* label = "InfoTAB";', SRC)
+        self.assertIn("void drawSaverLogo(uint32_t age)", SRC)
+        self.assertIn("drawSaverLogo(age);", SRC)
+        self.assertIn("saverLogoDrawn = false;", SRC)
+        self.assertIn("sinf(age * 0.00016f)", SRC)
+        self.assertIn("sinf(age * 0.00023f + 1.3f)", SRC)
+        self.assertIn("saverLogoPreviousX", SRC)
+        self.assertIn("saverLogoPreviousY", SRC)
+        self.assertIn("M5.Display.fillRect(saverLogoPreviousX - 4", SRC)
+        self.assertIn("M5.Display.print(label);", SRC)
+        body = SRC.split("void drawSaverLogo(uint32_t age) {", 1)[1].split("\n}\n", 1)[0]
+        self.assertNotIn("fillScreen(", body)
 
     def test_background_telemetry_kept_without_lcd_repaint(self):
         self.assertIn("SAVER_TELEMETRY_MS = 15UL * 1000UL", SRC)
@@ -68,7 +98,7 @@ class AnimatedSaverTests(unittest.TestCase):
             self.assertNotIn(forbidden, body)
 
     def test_five_modules_and_settings_still_present(self):
-        self.assertIn("InfoTAB v0.9.8", SRC)
+        self.assertIn("InfoTAB v0.9.9", SRC)
         self.assertIn('"AI PLATFORM", "ZASOBY", "NAS", "UPS", "USTAWIENIA"', SRC)
         self.assertIn("case Page::OtaUpload: handleOtaUpload(x, y); break;", SRC)
 

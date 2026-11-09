@@ -77,12 +77,18 @@ uint32_t saverLastFrameAt = 0;
 uint32_t saverLastPollAt = 0;
 uint8_t saverPreviousBrightness = 255;
 bool saverActive = false;
+bool saverEnabled = true; // NVS setting, default ON
 bool saverWakeInputArmed = false;
 bool saverIgnoreWakeTap = false;
 static constexpr uint8_t SAVER_OBJECT_COUNT = 4;
 int16_t saverPreviousX[SAVER_OBJECT_COUNT] = {};
 int16_t saverPreviousY[SAVER_OBJECT_COUNT] = {};
 bool saverHasPrevious[SAVER_OBJECT_COUNT] = {};
+bool saverLogoDrawn = false;
+int16_t saverLogoPreviousX = 0;
+int16_t saverLogoPreviousY = 0;
+uint16_t saverLogoPreviousW = 0;
+uint16_t saverLogoPreviousH = 0;
 bool aiBridgeOk = false;
 bool aiBridgeChecked = false;
 String aiBridgeVersion = "--";
@@ -753,6 +759,37 @@ void drawNetwork() {
     }
     drawNetworkValues();
 }
+// The saver switch is persisted in a separate NVS namespace from Wi-Fi.
+// Never write Preferences on every frame/touch; only on a real toggle.
+void loadSaverEnabled() {
+    Preferences prefs;
+    if (!prefs.begin("infotab_ui", true)) {
+        saverEnabled = true; // first boot / no preferences yet
+        return;
+    }
+    saverEnabled = prefs.getBool("saver_on", true);
+    prefs.end();
+}
+bool saveSaverEnabled(bool enabled) {
+    Preferences prefs;
+    if (!prefs.begin("infotab_ui", false)) return false;
+    const bool stored = prefs.putBool("saver_on", enabled) == 1;
+    prefs.end();
+    return stored;
+}
+void drawSaverToggle() {
+    M5.Display.fillRoundRect(57, 519, 540, 48, 9, UI_BORDER);
+    uiText(81, 532, "WYGASZACZ", UI_WHITE, 2, UI_BORDER);
+    const uint16_t fill = saverEnabled ? UI_GOOD : UI_CARD;
+    const uint16_t foreground = saverEnabled ? UI_BG : UI_MUTED;
+    M5.Display.fillRoundRect(442, 524, 146, 38, 8, fill);
+    const char* label = saverEnabled ? "ON" : "OFF";
+    M5.Display.setTextSize(2);
+    const int labelWidth = M5.Display.textWidth(label);
+    uiText(442 + (146 - labelWidth) / 2, 532,
+           label, foreground, 2, fill);
+}
+
 // All configuration and maintenance actions are on this page.
 void drawServiceValues() {
     valueAt(57, 136, 540, 47,
@@ -761,7 +798,7 @@ void drawServiceValues() {
     valueAt(675, 136, 535, 47,
             otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
             otaArmed ? UI_GOOD : UI_WHITE, 2);
-    valueAt(57, 427, 540, 44, "InfoTAB v0.9.8", UI_WHITE, 3);
+    valueAt(57, 427, 540, 44, "InfoTAB v0.9.9", UI_WHITE, 3);
     valueAt(57, 475, 540, 31,
             String("Czas pracy: ") + String(millis() / 60000) + " min", UI_MUTED, 2);
 }
@@ -784,8 +821,7 @@ void drawService() {
 
     uiText(57, 337, "OPROGRAMOWANIE", UI_WHITE, 3);
     uiText(57, 390, "WERSJA SYSTEMU", UI_MUTED);
-    M5.Display.fillRoundRect(57, 519, 540, 48, 9, UI_BORDER);
-    uiText(81, 532, "URUCHOM WYGASZACZ", UI_WHITE, 2, UI_BORDER);
+    drawSaverToggle();
 
     uiText(675, 337, "DIAGNOSTYKA", UI_WHITE, 3);
     uiText(675, 390, "PARTYCJE / AI BRIDGE", UI_MUTED);
@@ -819,9 +855,10 @@ static constexpr uint16_t SAVER_BG = 0x0821;     // near-black graphite
 static constexpr uint16_t SAVER_TRAIL = 0x536D;  // muted blue-grey
 static constexpr uint16_t SAVER_LINE = 0x6C10;   // subdued technical teal
 static constexpr uint16_t SAVER_HEAD = 0xA5F5;   // soft silver-blue
+static constexpr uint16_t SAVER_LOGO = 0x9D13;   // restrained silver-teal
 
 void startScreensaver() {
-    if (saverActive || otaArmed || otaInProgress) return;
+    if (!saverEnabled || saverActive || otaArmed || otaInProgress) return;
     saverPreviousBrightness = M5.Display.getBrightness();
     // Reduce LED ageing; never shut the backlight off or issue LCD sleep.
     uint8_t saverBrightness = (static_cast<uint16_t>(saverPreviousBrightness) * 55u) / 100u;
@@ -837,6 +874,7 @@ void startScreensaver() {
     saverLastPollAt = millis();
     for (uint8_t i = 0; i < SAVER_OBJECT_COUNT; ++i)
         saverHasPrevious[i] = false;
+    saverLogoDrawn = false;
     logEvent("Animated InfoTAB saver started (LCD still active)");
 }
 
@@ -860,6 +898,36 @@ void saverEraseObject(int x, int y) {
     const int y1 = min(displayHeight, y + 25);
     if (x1 > x0 && y1 > y0)
         M5.Display.fillRect(x0, y0, x1 - x0, y1 - y0, SAVER_BG);
+}
+
+// Moving wordmark, intentionally never fixed at one LCD coordinate.
+// Kept in the empty central strip between signal bands 2 and 3.
+void drawSaverLogo(uint32_t age) {
+    static constexpr const char* label = "InfoTAB";
+    M5.Display.setTextSize(4);
+    const int wordWidth = M5.Display.textWidth(label);
+    const int wordHeight = M5.Display.fontHeight();
+    const int x = (displayWidth - wordWidth) / 2
+                + static_cast<int>(84.0f * sinf(age * 0.00016f));
+    const int y = (displayHeight / 2 - 35) - wordHeight / 2
+                + static_cast<int>(9.0f * sinf(age * 0.00023f + 1.3f));
+    if (saverLogoDrawn && x == saverLogoPreviousX &&
+        y == saverLogoPreviousY) return;
+
+    // Erase only the previous wordmark rectangle, not the entire screen.
+    if (saverLogoDrawn) {
+        M5.Display.fillRect(saverLogoPreviousX - 4, saverLogoPreviousY - 3,
+                           saverLogoPreviousW + 8, saverLogoPreviousH + 6,
+                           SAVER_BG);
+    }
+    M5.Display.setTextColor(SAVER_LOGO, SAVER_BG);
+    M5.Display.setCursor(x, y);
+    M5.Display.print(label);
+    saverLogoPreviousX = x;
+    saverLogoPreviousY = y;
+    saverLogoPreviousW = wordWidth;
+    saverLogoPreviousH = wordHeight;
+    saverLogoDrawn = true;
 }
 
 void drawScreensaverFrame() {
@@ -901,6 +969,7 @@ void drawScreensaverFrame() {
         saverPreviousY[i] = y;
         saverHasPrevious[i] = true;
     }
+    drawSaverLogo(age);
 }
 
 void pollModuleWhileScreensaver() {
@@ -945,7 +1014,17 @@ void handleNetworkInfo(int x, int y) {
 void handleService(int x, int y) {
     if (handleNavigationTap(x,y)) return;
     if (inside(x, y, 57, 519, 540, 48)) {
-        if (!otaArmed && !otaInProgress) startScreensaver();
+        if (!otaArmed && !otaInProgress) {
+            const bool enabled = !saverEnabled;
+            if (saveSaverEnabled(enabled)) {
+                saverEnabled = enabled;
+                saverLastInteractionAt = millis();
+                drawSaverToggle();
+                logEvent(enabled ? "Screen saver enabled" : "Screen saver disabled");
+            } else {
+                logEvent("Screen saver preference write failed");
+            }
+        }
         return;
     }
     if (inside(x,y,57,207,540,63)) {
@@ -1509,8 +1588,9 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.9.8: animated LCD saver and touch wake; no panel sleep");
+    logEvent("v0.9.9: animated saver ON/OFF with moving InfoTAB logo");
     readSaved();
+    loadSaverEnabled();
     infoMessage = "Wybierz siec na ekranie.";
     render();
     saverLastInteractionAt = millis();
@@ -1633,7 +1713,7 @@ void loop() {
     }
     // Only main HMI pages are eligible. OTA, Wi-Fi setup and firmware
     // transfer never trigger the saver. No deep/light sleep is used.
-    if (mainPage(page) && !otaArmed && !otaInProgress &&
+    if (saverEnabled && mainPage(page) && !otaArmed && !otaInProgress &&
         !touch.isPressed() &&
         millis() - saverLastInteractionAt >= SAVER_IDLE_MS) {
         startScreensaver();
