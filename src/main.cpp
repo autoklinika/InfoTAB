@@ -47,6 +47,7 @@ constexpr uint32_t PANEL_IDLE_SLEEP_MS = 5UL * 60UL * 1000UL;
 // asleep, it automatically returns to the normal screen after 60 seconds.
 // Once a real touch wakeup is confirmed, the fallback stops firing.
 constexpr uint32_t PANEL_WAKE_PROBE_MS = 60UL * 1000UL;
+constexpr uint32_t PANEL_MANUAL_WAKE_PROBE_MS = 20UL * 1000UL;
 
 enum class Page { Dashboard, Resources, Power, NetworkInfo, Service, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
 struct NetworkEntry {
@@ -79,6 +80,10 @@ uint32_t panelSleepStartedAt = 0;
 bool panelAsleep = false;
 bool panelTouchWakeConfirmed = false;
 bool ignoreWakeTouchUntilRelease = false;
+bool panelManualSleepRequested = false;
+bool panelSleepIsManual = false;
+bool panelPilotTouchFailed = false; // no repeated unprovable auto-sleep cycles
+const char* panelWakeStatus = "NIE TESTOWANO";
 bool aiBridgeOk = false;
 bool aiBridgeChecked = false;
 String aiBridgeVersion = "--";
@@ -757,9 +762,10 @@ void drawServiceValues() {
     valueAt(675, 136, 535, 47,
             otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
             otaArmed ? UI_GOOD : UI_WHITE, 2);
-    valueAt(57, 427, 540, 44, "InfoTAB v0.9.5", UI_WHITE, 3);
-    valueAt(57, 509, 540, 39,
-            String("Czas pracy: ") + String(millis() / 60000) + " min", UI_MUTED, 2);
+    valueAt(57, 427, 540, 44, "InfoTAB v0.9.6", UI_WHITE, 3);
+    valueAt(57, 475, 540, 29,
+            String("Idle ") + String((millis() - panelLastActivityAt) / 1000) +
+            "s  |  " + String(panelWakeStatus), UI_MUTED, 2);
 }
 void drawService() {
     tabShell("", 4);
@@ -780,6 +786,8 @@ void drawService() {
 
     uiText(57, 337, "OPROGRAMOWANIE", UI_WHITE, 3);
     uiText(57, 390, "WERSJA SYSTEMU", UI_MUTED);
+    M5.Display.fillRoundRect(57, 513, 540, 50, 9, UI_BORDER);
+    uiText(81, 527, "USPIJ EKRAN (TEST)", UI_WHITE, 2, UI_BORDER);
 
     uiText(675, 337, "DIAGNOSTYKA", UI_WHITE, 3);
     uiText(675, 390, "PARTYCJE / AI BRIDGE", UI_MUTED);
@@ -840,6 +848,13 @@ void handleNetworkInfo(int x, int y) {
 }
 void handleService(int x, int y) {
     if (handleNavigationTap(x,y)) return;
+    if (inside(x, y, 57, 513, 540, 50)) {
+        if (!otaArmed && !otaInProgress) {
+            panelManualSleepRequested = true;
+            panelWakeStatus = "TEST SLEEP";
+        }
+        return;
+    }
     if (inside(x,y,57,207,540,63)) {
         page=Page::Home;
         render();
@@ -1395,19 +1410,27 @@ void updateConnection() {
 // SLPIN is a real LCD controller sleep transition via M5GFX Panel_DSI,
 // unlike merely painting a black screen or adjusting backlight PWM.
 // Never call ESP32 deepSleep/lightSleep here: touch polling must keep running.
-void enterPanelSleep() {
+void enterPanelSleep(bool manualTest = false) {
     if (panelAsleep) return;
     panelAsleep = true;
+    panelSleepIsManual = manualTest;
     panelSleepStartedAt = millis();
     M5.Display.sleep();
-    logEvent("LCD panel SLPIN (inactive, MCU stays running)");
+    logEvent(manualTest ? "LCD manual sleep test" : "LCD panel auto SLPIN");
 }
 void leavePanelSleep(bool touchWake) {
     if (!panelAsleep) return;
     M5.Display.wakeup();
     delay(130);  // LCD panel Sleep Out stabilization
     panelAsleep = false;
-    if (touchWake) panelTouchWakeConfirmed = true;
+    if (touchWake) {
+        panelTouchWakeConfirmed = true;
+        panelPilotTouchFailed = false;
+        panelWakeStatus = "DOTYK OK";
+    } else {
+        panelPilotTouchFailed = true;
+        panelWakeStatus = "AUTO / BRAK DOTYKU";
+    }
     ignoreWakeTouchUntilRelease = touchWake;
     panelLastActivityAt = millis();
     // Some MIPI LCD controllers discard their visible frame on wakeup.
@@ -1425,7 +1448,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.9.5: controller sleep and touch wake, five HMI modules");
+    logEvent("v0.9.6: manual panel sleep diagnosis and touch wake");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
@@ -1445,7 +1468,9 @@ void loop() {
         if (touch.wasPressed() || touch.isPressed()) {
             leavePanelSleep(true);
         } else if (!panelTouchWakeConfirmed &&
-                   millis() - panelSleepStartedAt >= PANEL_WAKE_PROBE_MS) {
+                   millis() - panelSleepStartedAt >=
+                   (panelSleepIsManual ? PANEL_MANUAL_WAKE_PROBE_MS
+                                       : PANEL_WAKE_PROBE_MS)) {
             leavePanelSleep(false);
         }
         // Sleep does not stop the MCU, but we never dispatch sleep/wake touches
@@ -1526,6 +1551,16 @@ void loop() {
         }
     }
 
+    // A clicked manual test enters sleep only after touch RELEASE.
+    // Return immediately: no HMI redraw while the LCD controller sleeps.
+    if (panelManualSleepRequested && !touch.isPressed() &&
+        !otaArmed && !otaInProgress) {
+        panelManualSleepRequested = false;
+        enterPanelSleep(true);
+        delay(12);
+        return;
+    }
+
     // No full-screen redraw on refresh. Only the visible data fields change.
     if (mainPage(page) &&
         (lastDashboardRefresh == 0 ||
@@ -1537,9 +1572,9 @@ void loop() {
     // Panel sleep is limited to ordinary dashboards: never sleep during
     // Wi-Fi setup, OTA diagnostics/activation or firmware transfer.
     if (mainPage(page) && !otaArmed && !otaInProgress &&
-        !touch.isPressed() &&
+        !panelPilotTouchFailed && !touch.isPressed() &&
         millis() - panelLastActivityAt >= PANEL_IDLE_SLEEP_MS) {
-        enterPanelSleep();
+        enterPanelSleep(false);
     }
     delay(8);
 }

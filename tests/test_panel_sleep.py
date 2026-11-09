@@ -27,7 +27,7 @@ class Tab5PanelSleepTests(unittest.TestCase):
             SOURCE,
             re.compile(
                 r"if \(mainPage\(page\) && !otaArmed && !otaInProgress &&"
-                r"\s*!touch\.isPressed\(\)", re.S,
+                r"\s*!panelPilotTouchFailed && !touch\.isPressed\(\)", re.S,
             ),
         )
         self.assertIn("millis() - panelLastActivityAt >= PANEL_IDLE_SLEEP_MS", SOURCE)
@@ -36,7 +36,26 @@ class Tab5PanelSleepTests(unittest.TestCase):
         self.assertIn("PANEL_WAKE_PROBE_MS = 60UL * 1000UL", SOURCE)
         self.assertIn("!panelTouchWakeConfirmed", SOURCE)
         self.assertIn("leavePanelSleep(false);", SOURCE)
-        self.assertIn("if (touchWake) panelTouchWakeConfirmed = true;", SOURCE)
+        self.assertIn("panelTouchWakeConfirmed = true;", SOURCE)
+        self.assertIn("PANEL_MANUAL_WAKE_PROBE_MS = 20UL * 1000UL", SOURCE)
+        self.assertIn("panelPilotTouchFailed = true;", SOURCE)
+        self.assertIn("panelPilotTouchFailed = false;", SOURCE)
+
+    def test_manual_sleep_is_accessible_and_deferred_until_release(self):
+        self.assertIn('"USPIJ EKRAN (TEST)"', SOURCE)
+        self.assertIn('if (inside(x, y, 57, 513, 540, 50))', SOURCE)
+        self.assertIn('panelManualSleepRequested = true;', SOURCE)
+        self.assertRegex(SOURCE, re.compile(
+            r'if \(panelManualSleepRequested && !touch\.isPressed\(\)'
+            r' &&\s*!otaArmed && !otaInProgress\) \{'
+            r'.*?enterPanelSleep\(true\);.*?return;', re.S,
+        ))
+
+    def test_visible_idle_and_last_wakeup_reason(self):
+        self.assertIn('String((millis() - panelLastActivityAt) / 1000)', SOURCE)
+        self.assertIn('panelWakeStatus = "DOTYK OK";', SOURCE)
+        self.assertIn('panelWakeStatus = "AUTO / BRAK DOTYKU";', SOURCE)
+        self.assertIn('InfoTAB v0.9.6', SOURCE)
 
     def test_wake_redraw_and_reacquire_values(self):
         self.assertRegex(
