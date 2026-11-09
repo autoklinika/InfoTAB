@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <cstring>
 #include <M5Unified.h>
+#include <lgfx/v1/platforms/esp32p4/Panel_DSI.hpp>
 #include <Preferences.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -40,12 +41,14 @@ constexpr const char* SERVICES_URL = "http://192.168.1.100:18092/services";
 constexpr const char* NAS_URL = "http://192.168.1.100:18092/nas";
 constexpr const char* RESOURCES_URL = "http://192.168.1.100:18092/resources";
 constexpr uint32_t RESOURCE_REFRESH_MS = 4000;
-// LCD panel controller Sleep In (MIPI-DSI CMD 0x10), not just backlight dimming.
-// The ESP32-P4 stays awake to poll touch; Wi-Fi and state are retained.
+// Tab5 ST7121/ST7123 is an integrated display/touch device. MIPI SLPIN (0x10)
+// can stop touch scanning; use MIPI DISPOFF (0x28) while keeping the
+// controller awake and touch reachable. Backlight is switched off too.
+// ESP32-P4 stays awake and polls touch; this is not a hardware power cut.
 constexpr uint32_t PANEL_IDLE_SLEEP_MS = 5UL * 60UL * 1000UL;
-// Pilot safety: if a given Tab5 panel revision cannot report touch while
-// asleep, it automatically returns to the normal screen after 60 seconds.
-// Once a real touch wakeup is confirmed, the fallback stops firing.
+// Pilot safety: if this panel revision cannot detect touch with Display OFF,
+// automatically re-enable the LCD after 60 seconds (20s for manual tests).
+// After a confirmed touch wake, fallback is disabled until next boot.
 constexpr uint32_t PANEL_WAKE_PROBE_MS = 60UL * 1000UL;
 constexpr uint32_t PANEL_MANUAL_WAKE_PROBE_MS = 20UL * 1000UL;
 
@@ -82,7 +85,8 @@ bool panelTouchWakeConfirmed = false;
 bool ignoreWakeTouchUntilRelease = false;
 bool panelManualSleepRequested = false;
 bool panelSleepIsManual = false;
-bool panelPilotTouchFailed = false; // no repeated unprovable auto-sleep cycles
+bool panelPilotTouchFailed = false; // no repeated unprovable auto-off cycles
+uint8_t panelSavedBrightness = 255;
 const char* panelWakeStatus = "NIE TESTOWANO";
 bool aiBridgeOk = false;
 bool aiBridgeChecked = false;
@@ -762,7 +766,7 @@ void drawServiceValues() {
     valueAt(675, 136, 535, 47,
             otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
             otaArmed ? UI_GOOD : UI_WHITE, 2);
-    valueAt(57, 427, 540, 44, "InfoTAB v0.9.6", UI_WHITE, 3);
+    valueAt(57, 427, 540, 44, "InfoTAB v0.9.7", UI_WHITE, 3);
     valueAt(57, 475, 540, 29,
             String("Idle ") + String((millis() - panelLastActivityAt) / 1000) +
             "s  |  " + String(panelWakeStatus), UI_MUTED, 2);
@@ -787,7 +791,7 @@ void drawService() {
     uiText(57, 337, "OPROGRAMOWANIE", UI_WHITE, 3);
     uiText(57, 390, "WERSJA SYSTEMU", UI_MUTED);
     M5.Display.fillRoundRect(57, 513, 540, 50, 9, UI_BORDER);
-    uiText(81, 527, "USPIJ EKRAN (TEST)", UI_WHITE, 2, UI_BORDER);
+    uiText(81, 527, "WYLACZ EKRAN (TEST)", UI_WHITE, 2, UI_BORDER);
 
     uiText(675, 337, "DIAGNOSTYKA", UI_WHITE, 3);
     uiText(675, 390, "PARTYCJE / AI BRIDGE", UI_MUTED);
@@ -851,7 +855,7 @@ void handleService(int x, int y) {
     if (inside(x, y, 57, 513, 540, 50)) {
         if (!otaArmed && !otaInProgress) {
             panelManualSleepRequested = true;
-            panelWakeStatus = "TEST SLEEP";
+            panelWakeStatus = "TEST DISPLAY OFF";
         }
         return;
     }
@@ -1407,23 +1411,53 @@ void updateConnection() {
 }
 } // namespace
 
-// SLPIN is a real LCD controller sleep transition via M5GFX Panel_DSI,
-// unlike merely painting a black screen or adjusting backlight PWM.
-// Never call ESP32 deepSleep/lightSleep here: touch polling must keep running.
+// Send MIPI DCS commands through the actual DSI bus. LGFX.writeCommand()
+// is not suitable here: the generic Bus_DSI::writeCommand is a no-op.
+// Explicit DCS DISPOFF/DISPON is not SLPIN/SLPOUT; we retain touch scanning.
+bool panelDisplayCommand(uint8_t command) {
+    auto* rawPanel = M5.Display.getPanel();
+    if (!rawPanel || !rawPanel->getBus() ||
+        rawPanel->getBus()->busType() != lgfx::bus_type_t::bus_dsi) {
+        return false;
+    }
+    auto* panel = static_cast<lgfx::Panel_DSI*>(rawPanel);
+    auto* bus = panel->getBusDSI();
+    if (!bus) return false;
+    M5.Display.startWrite();
+    const bool ok = bus->writeParams(command, nullptr, 0);
+    M5.Display.endWrite();
+    return ok;
+}
 void enterPanelSleep(bool manualTest = false) {
     if (panelAsleep) return;
+    if (!panelDisplayCommand(0x28)) {  // MIPI DCS Display OFF
+        panelWakeStatus = "DSI: BLAD DISP OFF";
+        panelPilotTouchFailed = true;
+        logEvent("LCD DSI DISPOFF command failed");
+        return;
+    }
+    panelSavedBrightness = M5.Display.getBrightness();
+    M5.Display.setBrightness(0);
     panelAsleep = true;
     panelSleepIsManual = manualTest;
     panelSleepStartedAt = millis();
-    M5.Display.sleep();
-    logEvent(manualTest ? "LCD manual sleep test" : "LCD panel auto SLPIN");
+    logEvent(manualTest ? "LCD manual DISPOFF test" : "LCD auto DISPOFF");
 }
 void leavePanelSleep(bool touchWake) {
     if (!panelAsleep) return;
-    M5.Display.wakeup();
-    delay(130);  // LCD panel Sleep Out stabilization
+    // Re-enable LCD output while the controller/touch are still powered.
+    bool displayOn = panelDisplayCommand(0x29); // MIPI DCS Display ON
+    if (!displayOn) {
+        delay(60);
+        displayOn = panelDisplayCommand(0x29);
+    }
+    delay(35);
+    M5.Display.setBrightness(panelSavedBrightness);
     panelAsleep = false;
-    if (touchWake) {
+    if (!displayOn) {
+        panelWakeStatus = "DSI: BLAD DISP ON";
+        panelPilotTouchFailed = true;
+    } else if (touchWake) {
         panelTouchWakeConfirmed = true;
         panelPilotTouchFailed = false;
         panelWakeStatus = "DOTYK OK";
@@ -1448,7 +1482,7 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.9.6: manual panel sleep diagnosis and touch wake");
+    logEvent("v0.9.7: MIPI DISPLAY OFF + touch wake (no SLPIN)");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
@@ -1551,8 +1585,8 @@ void loop() {
         }
     }
 
-    // A clicked manual test enters sleep only after touch RELEASE.
-    // Return immediately: no HMI redraw while the LCD controller sleeps.
+    // Manual Display OFF test starts only after touch RELEASE.
+    // Return immediately: no HMI redraw while LCD output is disabled.
     if (panelManualSleepRequested && !touch.isPressed() &&
         !otaArmed && !otaInProgress) {
         panelManualSleepRequested = false;
@@ -1569,8 +1603,8 @@ void loop() {
         refreshDashboard();
     }
 
-    // Panel sleep is limited to ordinary dashboards: never sleep during
-    // Wi-Fi setup, OTA diagnostics/activation or firmware transfer.
+    // LCD Display OFF is limited to dashboard pages: never disable output
+    // during Wi-Fi setup, OTA diagnostics/activation or firmware transfer.
     if (mainPage(page) && !otaArmed && !otaInProgress &&
         !panelPilotTouchFailed && !touch.isPressed() &&
         millis() - panelLastActivityAt >= PANEL_IDLE_SLEEP_MS) {
