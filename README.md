@@ -1,5 +1,43 @@
 # InfoTAB
 
+## Produkcyjna wersja v0.9.4 — zatwierdzona 09.11.2026
+
+**Gałąź `main`** zawiera zaakceptowany przez użytkownika firmware
+InfoTAB na M5Stack Tab5 oraz serwer read-only na AI Platform.
+
+Pięć ekranów (kolejność w dolnej belce):
+**AI PLATFORM → ZASOBY → NAS → UPS → USTAWIENIA**.
+
+- **AI PLATFORM:** 13 stanów usług przez `GET /services`.
+- **ZASOBY:** pomiary CPU, RAM, Radeon 890M, RTX 5060 Ti i NVMe
+  przez `GET /resources`; osobno RAM systemowy i współdzielona pamięć GPU.
+- **NAS:** temperatury, pamięć, dyski, wolumeny, RAID i stan
+  backupów AI Platform Stage K przez `GET /nas` (SNMPv3 do QNAP
+  realizuje wyłącznie lokalna usługa na Minisforum).
+- **UPS:** lista odczytów Modbus TCP, moc oznaczona jako szacunkowa.
+- **USTAWIENIA:** Wi-Fi, diagnostyka, fizycznie aktywowane Wi-Fi OTA.
+
+Wszystkie trzy endpointy InfoTAB są w LAN na
+`http://192.168.1.100:18092` i nie udostępniają haseł.
+Aktualizacje w repozytorium nie uruchamiają OTA automatycznie.
+Przyrostowa wersja firmware `v0.9.4` została przetestowana
+na fizycznym Tab5 i zaakceptowana 09.11.2026. Ostatni odczyt zasobów
+na ekranie jest dynamiczny i nie należy traktować liczb w raportach
+jako bieżących pomiarów.
+
+**Uwaga:** `Backup AI STAGE K: OK` oznacza monitor kopii AI Platform
+zapisywanych na GlobalNAS, a nie status HBS 3. Stan `RAID READY`
+nie zastępuje testu SMART dysków. Bufor 96 GiB Radeon jest pamięcią
+współdzieloną, nie dodatkową pamięcią fizyczną.
+
+Szczegóły: [Zasoby](docs/HMI_RESOURCES_TELEMETRY.md),
+[NAS i RAID](docs/NAS_MONITORING.md),
+[pięć ekranów](docs/HMI_RESOURCES_V093.md).
+Wcześniejsze opisy wersji poniżej są historycznymi raportami i
+mogą zawierać statusy PENDING dotyczące dawnych wydań.
+
+---
+
 ## v0.9.2 — lista UPS zamiast kafelków
 
 Ekran UPS ma teraz 9 pozycji: stan urządzenia, wejście, wyjście,

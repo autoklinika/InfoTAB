@@ -3,6 +3,7 @@ name: Firmware Build - InfoTAB
 on:
   push:
     branches:
+      - main
       - feature/initial-platformio-tab5
   pull_request:
   workflow_dispatch:
@@ -31,6 +32,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install "platformio>=6.1,<7" "click==8.1.8"
+
+      - name: Run backend and HMI contract tests
+        run: python -m unittest discover -s tests -v
 
       - name: Compile Tab5 firmware
         run: pio run -e infotab_tab5
