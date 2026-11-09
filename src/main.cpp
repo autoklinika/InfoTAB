@@ -38,6 +38,8 @@ constexpr uint32_t DASH_REFRESH_MS = 8000;
 constexpr const char* BRIDGE_HEALTH = "http://192.168.1.100:8080/health";
 constexpr const char* SERVICES_URL = "http://192.168.1.100:18092/services";
 constexpr const char* NAS_URL = "http://192.168.1.100:18092/nas";
+constexpr const char* RESOURCES_URL = "http://192.168.1.100:18092/resources";
+constexpr uint32_t RESOURCE_REFRESH_MS = 4000;
 
 enum class Page { Dashboard, Resources, Power, NetworkInfo, Service, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
 struct NetworkEntry {
@@ -86,6 +88,21 @@ String nasLastDisplayed[NAS_ROW_COUNT];
 uint16_t nasLastDisplayColor[NAS_ROW_COUNT]{};
 bool nasRowsPainted = false;
 bool nasApiAvailable = false;
+
+// The resource API exposes fixed read-only keys; no arbitrary commands.
+static constexpr size_t RESOURCE_KEY_COUNT = 19;
+static const char* const resourceKeys[RESOURCE_KEY_COUNT] = {
+    "cpu_temp_c", "cpu_load_pct", "cpu_freq_mhz",
+    "ram_used_mib", "ram_total_mib",
+    "radeon_temp_c", "radeon_load_pct", "radeon_vram_used_mib",
+    "radeon_vram_total_mib", "radeon_power_w",
+    "rtx_temp_c", "rtx_load_pct", "rtx_vram_used_mib",
+    "rtx_vram_total_mib", "rtx_power_w", "rtx_fan_pct",
+    "nvme1_temp_c", "nvme2_temp_c", "uptime_h"
+};
+String resourceValues[RESOURCE_KEY_COUNT];
+bool resourcesApiAvailable = false;
+bool resourcesPainted = false;
 
 
 struct UpsData {
@@ -321,6 +338,40 @@ void pollNas() {
     }
 }
 
+void pollResources() {
+    resourcesApiAvailable = false;
+    for (size_t i = 0; i < RESOURCE_KEY_COUNT; ++i) resourceValues[i] = "--";
+    if (!connected()) return;
+    NetworkClient client;
+    HTTPClient http;
+    http.setConnectTimeout(1000);
+    http.setTimeout(3400);
+    if (!http.begin(client, String(RESOURCES_URL))) return;
+    if (http.GET() == 200) {
+        const String body = http.getString();
+        bool complete = body.length() > 0 && body.length() < 4096;
+        if (complete) {
+            for (size_t i = 0; i < RESOURCE_KEY_COUNT; ++i) {
+                const String target = String(resourceKeys[i]) + "=";
+                int start = body.indexOf(target);
+                if (start > 0 && body[start - 1] != '\n') start = -1;
+                if (start < 0) { complete = false; break; }
+                const int at = start + target.length();
+                int end = body.indexOf('\n', at);
+                if (end < 0) end = body.length();
+                if (end - at > 48) { complete = false; break; }
+                String value = body.substring(at, end);
+                value.trim();
+                resourceValues[i] = value.length() ? value : "--";
+            }
+        }
+        resourcesApiAvailable = complete;
+    }
+    http.end();
+    if (!resourcesApiAvailable)
+        for (size_t i = 0; i < RESOURCE_KEY_COUNT; ++i) resourceValues[i] = "--";
+}
+
 // Static screen elements are drawn only when navigating to this page.
 // Dynamic values refresh in small rectangles; NO fillScreen() on any timer.
 // InfoTAB: restrained industrial HMI, 5 horizontal swipe pages.
@@ -462,15 +513,107 @@ void drawOverview() {
     }
     drawOverviewValues();
 }
-// Resources is intentionally an empty module shell until its telemetry
-// contract is agreed. No fabricated resource percentages or GPU load.
+// Simple 3-column read-only hardware telemetry. No cards, bars or
+// full-screen repaints during refresh; only changed values are redrawn.
+enum class ResFormat : uint8_t {
+    TempC, Percent, MhzToGhz, MemoryGiB, MemoryMiB, PowerW, Hours
+};
+struct ResourceVisualRow {
+    uint8_t col;
+    uint8_t row;
+    const char* label;
+    uint8_t primary;
+    uint8_t secondary;
+    ResFormat format;
+};
+static constexpr ResourceVisualRow RESOURCE_ROWS[] = {
+    {0, 0, "TEMPERATURA CPU",  0,  0, ResFormat::TempC},
+    {0, 1, "OBCIAZENIE CPU",  1,  0, ResFormat::Percent},
+    {0, 2, "ZEGAR CPU (SR.)", 2,  0, ResFormat::MhzToGhz},
+    {0, 3, "RAM SYSTEMOWY",   3,  4, ResFormat::MemoryGiB},
+    {0, 4, "NVME 1",          16,  0, ResFormat::TempC},
+    {0, 5, "NVME 2",          17,  0, ResFormat::TempC},
+    {0, 6, "CZAS PRACY",      18,  0, ResFormat::Hours},
+    {1, 0, "TEMPERATURA GPU",  5,  0, ResFormat::TempC},
+    {1, 1, "OBCIAZENIE GPU",   6,  0, ResFormat::Percent},
+    {1, 2, "PAMIEC WSPOLDZ.",  7,  8, ResFormat::MemoryGiB},
+    {1, 3, "POBOR MOCY",       9,  0, ResFormat::PowerW},
+    {2, 0, "TEMPERATURA GPU", 10,  0, ResFormat::TempC},
+    {2, 1, "OBCIAZENIE GPU",  11,  0, ResFormat::Percent},
+    {2, 2, "VRAM",            12, 13, ResFormat::MemoryMiB},
+    {2, 3, "POBOR MOCY",      14,  0, ResFormat::PowerW},
+    {2, 4, "WENTYLATOR",      15,  0, ResFormat::Percent}
+};
+static constexpr size_t RESOURCE_ROW_COUNT =
+    sizeof(RESOURCE_ROWS) / sizeof(RESOURCE_ROWS[0]);
+String resourcesLastDrawn[RESOURCE_ROW_COUNT];
+uint16_t resourcesLastColor[RESOURCE_ROW_COUNT]{};
+
+String resourceDisplayValue(const ResourceVisualRow& metric) {
+    const String first = resourceValues[metric.primary];
+    if (!resourcesApiAvailable || first == "--") return "--";
+    if (metric.format == ResFormat::MemoryGiB ||
+        metric.format == ResFormat::MemoryMiB) {
+        const String second = resourceValues[metric.secondary];
+        if (second == "--") return "--";
+        const float usedMiB = first.toFloat();
+        const float totalMiB = second.toFloat();
+        if (usedMiB < 0 || totalMiB <= 0 || usedMiB > totalMiB) return "--";
+        if (metric.format == ResFormat::MemoryMiB)
+            return String(static_cast<int>(usedMiB)) + " / " +
+                   String(static_cast<int>(totalMiB)) + " MiB";
+        return String(usedMiB / 1024.0f, 1) + " / " +
+               String(totalMiB / 1024.0f, 1) + " GiB";
+    }
+    if (metric.format == ResFormat::TempC) return first + " C";
+    if (metric.format == ResFormat::Percent) return first + "%";
+    if (metric.format == ResFormat::MhzToGhz)
+        return String(first.toFloat() / 1000.0f, 2) + " GHz";
+    if (metric.format == ResFormat::PowerW) return first + " W";
+    if (metric.format == ResFormat::Hours) return first + " h";
+    return "--";
+}
+void drawResourcesValues() {
+    const int colWidth = (displayWidth - 64) / 3;
+    for (size_t i = 0; i < RESOURCE_ROW_COUNT; ++i) {
+        const ResourceVisualRow& metric = RESOURCE_ROWS[i];
+        const int x = 32 + static_cast<int>(metric.col) * colWidth + 16;
+        const int y = 151 + static_cast<int>(metric.row) * 62;
+        const String value = resourceDisplayValue(metric);
+        const uint16_t color = value == "--" ? UI_MUTED : UI_WHITE;
+        if (resourcesPainted && value == resourcesLastDrawn[i] &&
+            color == resourcesLastColor[i]) continue;
+        M5.Display.fillRect(x, y + 23, colWidth - 32, 31, UI_BG);
+        uiText(x, y + 25, value, color, 3, UI_BG);
+        resourcesLastDrawn[i] = value;
+        resourcesLastColor[i] = color;
+    }
+    resourcesPainted = true;
+}
 void drawResources() {
     tabShell("", 1);
+    resourcesPainted = false;
     uiText(42, 29, "ZASOBY", UI_WHITE, 3, UI_BG);
     M5.Display.drawFastHLine(40, 74, displayWidth - 80, UI_BORDER);
-    uiText(56, 116, "MONITORING ZASOBOW AI PLATFORM", UI_MUTED, 2, UI_BG);
-    M5.Display.drawFastHLine(48, 169, displayWidth - 96, UI_BORDER);
-    uiText(56, 195, "ODCZYTY NIE SA JESZCZE SKONFIGUROWANE", UI_MUTED, 2, UI_BG);
+    const int colWidth = (displayWidth - 64) / 3;
+    static const char* headings[] = {
+        "CPU / RAM", "RADEON 890M", "RTX 5060 Ti"
+    };
+    for (int col = 0; col < 3; ++col) {
+        const int x = 32 + col * colWidth + 16;
+        uiText(x, 101, headings[col], UI_WHITE, 3, UI_BG);
+        M5.Display.drawFastHLine(x, 136, colWidth - 32, UI_BORDER);
+    }
+    for (int col = 1; col < 3; ++col)
+        M5.Display.drawFastVLine(32 + col * colWidth, 91, 503, UI_BORDER);
+    for (size_t i = 0; i < RESOURCE_ROW_COUNT; ++i) {
+        const auto& metric = RESOURCE_ROWS[i];
+        const int x = 32 + static_cast<int>(metric.col) * colWidth + 16;
+        const int y = 151 + static_cast<int>(metric.row) * 62;
+        uiText(x, y, metric.label, UI_MUTED, 2, UI_BG);
+        M5.Display.drawFastHLine(x, y + 57, colWidth - 32, UI_BORDER);
+    }
+    drawResourcesValues();
 }
 
 // Eight aligned tiles; each live measurement has its own light graphite card.
@@ -602,7 +745,7 @@ void drawServiceValues() {
     valueAt(675, 136, 535, 47,
             otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
             otaArmed ? UI_GOOD : UI_WHITE, 2);
-    valueAt(57, 427, 540, 44, "InfoTAB v0.9.3", UI_WHITE, 3);
+    valueAt(57, 427, 540, 44, "InfoTAB v0.9.4", UI_WHITE, 3);
     valueAt(57, 509, 540, 39,
             String("Czas pracy: ") + String(millis() / 60000) + " min", UI_MUTED, 2);
 }
@@ -635,6 +778,7 @@ void drawService() {
 
 void drawDashboardValues() {
     switch(page) {
+        case Page::Resources: drawResourcesValues(); break;
         case Page::Dashboard: drawOverviewValues(); break;
         case Page::Power: drawPowerValues(); break;
         case Page::NetworkInfo: drawNetworkValues(); break;
@@ -645,6 +789,7 @@ void drawDashboardValues() {
 void drawDashboard() { drawOverview(); }
 void refreshDashboard() {
     if (page == Page::Dashboard) pollPlatformServices();
+    else if (page == Page::Resources) pollResources();
     else if (page == Page::NetworkInfo) pollNas();
     else if (page == Page::Power) pollUpsReadOnly();
     lastDashboardRefresh = millis();
@@ -1323,7 +1468,8 @@ void loop() {
     // No full-screen redraw on refresh. Only the visible data fields change.
     if (mainPage(page) &&
         (lastDashboardRefresh == 0 ||
-         millis() - lastDashboardRefresh >= DASH_REFRESH_MS)) {
+         millis() - lastDashboardRefresh >=
+             (page == Page::Resources ? RESOURCE_REFRESH_MS : DASH_REFRESH_MS))) {
         refreshDashboard();
     }
     delay(8);

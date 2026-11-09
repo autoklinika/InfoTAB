@@ -4,6 +4,7 @@
 Runs as harrypotter (systemd --user), not root. Does not restart/alter any service.
 GET /services -> newline-separated NAME=running|stopped|unknown (text/plain).
 GET /nas -> read-only QNAP status/metrics, unknown values are "--".
+GET /resources -> local CPU/RAM/AMD/NVIDIA sensor data (fixed keys, read-only).
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import ipaddress
 import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from nas_monitor import snapshot_bytes as nas_snapshot_bytes
+from infotab_resources import snapshot_bytes as resources_snapshot_bytes
 
 BIND_HOST = "192.168.1.100"
 PORT = 18092
@@ -79,6 +81,8 @@ class Handler(BaseHTTPRequestHandler):
             body = snapshot()
         elif self.path == "/nas":
             body = nas_snapshot_bytes()
+        elif self.path == "/resources":
+            body = resources_snapshot_bytes()
         else:
             self.send_error(404)
             return
