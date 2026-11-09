@@ -40,6 +40,10 @@ constexpr const char* SERVICES_URL = "http://192.168.1.100:18092/services";
 constexpr const char* NAS_URL = "http://192.168.1.100:18092/nas";
 constexpr const char* RESOURCES_URL = "http://192.168.1.100:18092/resources";
 constexpr uint32_t RESOURCE_REFRESH_MS = 4000;
+// Animated LCD saver: no panel sleep / no SLPIN. First touch restores HMI.
+constexpr uint32_t SAVER_IDLE_MS = 5UL * 60UL * 1000UL;
+constexpr uint32_t SAVER_FRAME_MS = 45;  // <=23 fps; small dirty regions only
+constexpr uint32_t SAVER_TELEMETRY_MS = 15UL * 1000UL;
 
 enum class Page { Dashboard, Resources, Power, NetworkInfo, Service, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
 struct NetworkEntry {
@@ -67,6 +71,18 @@ bool saveAfterSuccess = false;
 uint32_t connectionStart = 0;
 uint32_t lastHomeRefresh = 0;
 uint32_t lastDashboardRefresh = 0;
+uint32_t saverLastInteractionAt = 0;
+uint32_t saverStartedAt = 0;
+uint32_t saverLastFrameAt = 0;
+uint32_t saverLastPollAt = 0;
+uint8_t saverPreviousBrightness = 255;
+bool saverActive = false;
+bool saverWakeInputArmed = false;
+bool saverIgnoreWakeTap = false;
+static constexpr uint8_t SAVER_OBJECT_COUNT = 4;
+int16_t saverPreviousX[SAVER_OBJECT_COUNT] = {};
+int16_t saverPreviousY[SAVER_OBJECT_COUNT] = {};
+bool saverHasPrevious[SAVER_OBJECT_COUNT] = {};
 bool aiBridgeOk = false;
 bool aiBridgeChecked = false;
 String aiBridgeVersion = "--";
@@ -745,8 +761,8 @@ void drawServiceValues() {
     valueAt(675, 136, 535, 47,
             otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
             otaArmed ? UI_GOOD : UI_WHITE, 2);
-    valueAt(57, 427, 540, 44, "InfoTAB v0.9.4", UI_WHITE, 3);
-    valueAt(57, 509, 540, 39,
+    valueAt(57, 427, 540, 44, "InfoTAB v0.9.8", UI_WHITE, 3);
+    valueAt(57, 475, 540, 31,
             String("Czas pracy: ") + String(millis() / 60000) + " min", UI_MUTED, 2);
 }
 void drawService() {
@@ -768,6 +784,8 @@ void drawService() {
 
     uiText(57, 337, "OPROGRAMOWANIE", UI_WHITE, 3);
     uiText(57, 390, "WERSJA SYSTEMU", UI_MUTED);
+    M5.Display.fillRoundRect(57, 519, 540, 48, 9, UI_BORDER);
+    uiText(81, 532, "URUCHOM WYGASZACZ", UI_WHITE, 2, UI_BORDER);
 
     uiText(675, 337, "DIAGNOSTYKA", UI_WHITE, 3);
     uiText(675, 390, "PARTYCJE / AI BRIDGE", UI_MUTED);
@@ -795,6 +813,104 @@ void refreshDashboard() {
     lastDashboardRefresh = millis();
     if (mainPage(page)) drawDashboardValues();
 }
+// Animated screen saver: muted moving data pulses on a dark LCD.
+ // No static labels, no panel sleep and no full-screen redraw per frame.
+static constexpr uint16_t SAVER_BG = 0x0821;     // near-black graphite
+static constexpr uint16_t SAVER_TRAIL = 0x536D;  // muted blue-grey
+static constexpr uint16_t SAVER_LINE = 0x6C10;   // subdued technical teal
+static constexpr uint16_t SAVER_HEAD = 0xA5F5;   // soft silver-blue
+
+void startScreensaver() {
+    if (saverActive || otaArmed || otaInProgress) return;
+    saverPreviousBrightness = M5.Display.getBrightness();
+    // Reduce LED ageing; never shut the backlight off or issue LCD sleep.
+    uint8_t saverBrightness = (static_cast<uint16_t>(saverPreviousBrightness) * 55u) / 100u;
+    if (saverBrightness < 48) saverBrightness = 48;
+    if (saverBrightness > saverPreviousBrightness)
+        saverBrightness = saverPreviousBrightness;
+    M5.Display.setBrightness(saverBrightness);
+    M5.Display.fillScreen(SAVER_BG);
+    saverActive = true;
+    saverWakeInputArmed = false; // avoid catching the manual preview tap
+    saverStartedAt = millis();
+    saverLastFrameAt = 0;
+    saverLastPollAt = millis();
+    for (uint8_t i = 0; i < SAVER_OBJECT_COUNT; ++i)
+        saverHasPrevious[i] = false;
+    logEvent("Animated InfoTAB saver started (LCD still active)");
+}
+
+void stopScreensaver() {
+    if (!saverActive) return;
+    saverActive = false;
+    M5.Display.setBrightness(saverPreviousBrightness);
+    saverLastInteractionAt = millis();
+    saverIgnoreWakeTap = true;
+    render();             // previous module restored, no navigation side effects
+    lastDashboardRefresh = 0;
+    logEvent("Animated InfoTAB saver stopped by touch");
+}
+
+void saverEraseObject(int x, int y) {
+    // Each moving signal owns a separate horizontal band. Erase only a
+    // small region to keep >20 fps smooth even on a MIPI-DPI framebuffer.
+    const int x0 = max(0, x - 100);
+    const int y0 = max(0, y - 24);
+    const int x1 = min(displayWidth, x + 100);
+    const int y1 = min(displayHeight, y + 25);
+    if (x1 > x0 && y1 > y0)
+        M5.Display.fillRect(x0, y0, x1 - x0, y1 - y0, SAVER_BG);
+}
+
+void drawScreensaverFrame() {
+    const uint32_t now = millis();
+    if (saverLastFrameAt && now - saverLastFrameAt < SAVER_FRAME_MS)
+        return;
+    saverLastFrameAt = now;
+    const uint32_t age = now - saverStartedAt;
+    const int travel = displayWidth + 220;
+    const uint32_t step = age / SAVER_FRAME_MS;
+    for (uint8_t i = 0; i < SAVER_OBJECT_COUNT; ++i) {
+        const int direction = (i & 1) ? -1 : 1;
+        const uint32_t progression = (step * (2u + (i % 3u)) + 245u * i)
+                                   % static_cast<uint32_t>(travel);
+        const int x = direction > 0
+                    ? static_cast<int>(progression) - 110
+                    : displayWidth + 110 - static_cast<int>(progression);
+        const float angle = (static_cast<float>(age) + 900.0f * i)
+                          * (0.00065f + 0.00008f * i);
+        const int y = 115 + static_cast<int>(i) * 151
+                    + static_cast<int>(19.0f * sinf(angle));
+        if (saverHasPrevious[i])
+            saverEraseObject(saverPreviousX[i], saverPreviousY[i]);
+
+        // A sparse moving signal packet; no static navigation/text to retain.
+        const int tailX = direction > 0 ? x - 78 : x + 14;
+        if (tailX >= 0 && tailX < displayWidth) {
+            const int clipped = max(0, tailX);
+            const int length = min(displayWidth, tailX + 65) - clipped;
+            if (length > 0)
+                M5.Display.drawFastHLine(clipped, y, length, SAVER_TRAIL);
+        }
+        M5.Display.fillCircle(x - direction * 28, y, 2, SAVER_LINE);
+        M5.Display.drawCircle(x, y, 13, SAVER_TRAIL);
+        M5.Display.fillCircle(x, y, 5, SAVER_HEAD);
+        M5.Display.drawFastVLine(x, y - 20, 7, SAVER_LINE);
+        M5.Display.drawFastVLine(x, y + 14, 7, SAVER_LINE);
+        saverPreviousX[i] = x;
+        saverPreviousY[i] = y;
+        saverHasPrevious[i] = true;
+    }
+}
+
+void pollModuleWhileScreensaver() {
+    if (page == Page::Dashboard) pollPlatformServices();
+    else if (page == Page::Resources) pollResources();
+    else if (page == Page::NetworkInfo) pollNas();
+    else if (page == Page::Power) pollUpsReadOnly();
+    // No LCD writes here; the background telemetry remains fresh.
+}
+
 void openMainPage(Page target) {
     if (!mainPage(target) || page == target) return;
     page = target;
@@ -828,6 +944,10 @@ void handleNetworkInfo(int x, int y) {
 }
 void handleService(int x, int y) {
     if (handleNavigationTap(x,y)) return;
+    if (inside(x, y, 57, 519, 540, 48)) {
+        if (!otaArmed && !otaInProgress) startScreensaver();
+        return;
+    }
     if (inside(x,y,57,207,540,63)) {
         page=Page::Home;
         render();
@@ -1389,10 +1509,11 @@ void setup() {
         M5.Display.setRotation(0);
     displayWidth = M5.Display.width();
     displayHeight = M5.Display.height();
-    logEvent("v0.9.2: UPS and AI Platform list views, Modbus and OTA");
+    logEvent("v0.9.8: animated LCD saver and touch wake; no panel sleep");
     readSaved();
     infoMessage = "Wybierz siec na ekranie.";
     render();
+    saverLastInteractionAt = millis();
     if (savedSsid.length()) {
         pendingSsid = savedSsid;
         pendingPassword = savedPassword;
@@ -1403,7 +1524,40 @@ void setup() {
 void loop() {
     M5.update();
     const auto touch = M5.Touch.getDetail();
-    // Gesture recognition: only 4 main pages accept horizontal swipes.
+
+    // Waking touch is consumed, never passed through to tabs, OTA or Wi-Fi.
+    if (saverActive) {
+        // Arm wake only after the preview touch has been fully released.
+        // This prevents the same tap from starting and stopping the saver.
+        if (!saverWakeInputArmed) {
+            if (!touch.isPressed() && !touch.wasReleased() &&
+                !touch.wasClicked()) saverWakeInputArmed = true;
+        } else if (touch.wasPressed() || touch.isPressed() ||
+                   touch.wasClicked()) {
+            stopScreensaver();
+            delay(8);
+            return;
+        }
+        if (mainPage(page) && millis() - saverLastPollAt >= SAVER_TELEMETRY_MS) {
+            saverLastPollAt = millis();
+            pollModuleWhileScreensaver();
+        }
+        drawScreensaverFrame();
+        delay(8);
+        return;
+    }
+    if (saverIgnoreWakeTap) {
+        if (!touch.isPressed()) saverIgnoreWakeTap = false;
+        saverLastInteractionAt = millis();
+        delay(8);
+        return;
+    }
+    if (touch.wasPressed() || touch.isPressed() || touch.wasReleased() ||
+        touch.wasClicked()) {
+        saverLastInteractionAt = millis();
+    }
+
+    // Gesture recognition: all five main pages accept horizontal swipes.
     // A press/release with <90 px travel remains a normal button tap.
     static bool trackingTouch = false;
     static int startX = 0, startY = 0, lastX = 0, lastY = 0;
@@ -1453,6 +1607,11 @@ void loop() {
         }
     }
 
+    // Settings may have started the manual preview during touch dispatch.
+    if (saverActive) {
+        delay(8);
+        return;
+    }
     updateConnection();
     if (otaArmed) {
         if (!otaInProgress &&
@@ -1471,6 +1630,13 @@ void loop() {
          millis() - lastDashboardRefresh >=
              (page == Page::Resources ? RESOURCE_REFRESH_MS : DASH_REFRESH_MS))) {
         refreshDashboard();
+    }
+    // Only main HMI pages are eligible. OTA, Wi-Fi setup and firmware
+    // transfer never trigger the saver. No deep/light sleep is used.
+    if (mainPage(page) && !otaArmed && !otaInProgress &&
+        !touch.isPressed() &&
+        millis() - saverLastInteractionAt >= SAVER_IDLE_MS) {
+        startScreensaver();
     }
     delay(8);
 }
