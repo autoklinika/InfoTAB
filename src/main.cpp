@@ -39,7 +39,7 @@ constexpr const char* BRIDGE_HEALTH = "http://192.168.1.100:8080/health";
 constexpr const char* SERVICES_URL = "http://192.168.1.100:18092/services";
 constexpr const char* NAS_URL = "http://192.168.1.100:18092/nas";
 
-enum class Page { Dashboard, Power, NetworkInfo, Service, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
+enum class Page { Dashboard, Resources, Power, NetworkInfo, Service, Home, Networks, Password, Connecting, OtaDiag, OtaUpload };
 struct NetworkEntry {
     String ssid;
     int rssi = -100;
@@ -323,7 +323,7 @@ void pollNas() {
 
 // Static screen elements are drawn only when navigating to this page.
 // Dynamic values refresh in small rectangles; NO fillScreen() on any timer.
-// InfoTAB v0.7: restrained industrial HMI, 4 horizontal swipe pages.
+// InfoTAB: restrained industrial HMI, 5 horizontal swipe pages.
 // Only page changes clear the whole LCD. Telemetry changes repaint values.
 static constexpr uint16_t UI_BG = 0x322A;    // brighter charcoal
 static constexpr uint16_t UI_CARD = 0x532E;  // medium graphite
@@ -334,24 +334,34 @@ static constexpr uint16_t UI_ACCENT = 0x8678; // muted teal
 static constexpr uint16_t UI_GOOD = 0x9EF6;
 static constexpr uint16_t UI_WARNING = 0xFE93;
 
+// A single source of truth for display order, swipe handling and tap targets.
+static constexpr Page MAIN_PAGES[] = {
+    Page::Dashboard, Page::Resources, Page::NetworkInfo,
+    Page::Power, Page::Service
+};
+static constexpr int MAIN_PAGE_COUNT =
+    static_cast<int>(sizeof(MAIN_PAGES) / sizeof(MAIN_PAGES[0]));
+static constexpr int NAV_LEFT = 32;
+static constexpr int NAV_RIGHT = 32;
+static_assert(MAIN_PAGE_COUNT == 5, "InfoTAB navigation has five modules");
+
 bool mainPage(Page p) {
-    return p == Page::Dashboard || p == Page::Power ||
-           p == Page::NetworkInfo || p == Page::Service;
+    for (int i = 0; i < MAIN_PAGE_COUNT; ++i) {
+        if (MAIN_PAGES[i] == p) return true;
+    }
+    return false;
 }
 int mainPageIndex(Page p) {
-    switch (p) {
-        case Page::Dashboard: return 0;
-        case Page::NetworkInfo: return 1;
-        case Page::Power: return 2;
-        case Page::Service: return 3;
-        default: return -1;
+    for (int i = 0; i < MAIN_PAGE_COUNT; ++i) {
+        if (MAIN_PAGES[i] == p) return i;
     }
+    return -1;
 }
 Page mainPageByIndex(int idx) {
-    static constexpr Page pages[] = {
-        Page::Dashboard, Page::NetworkInfo, Page::Power, Page::Service
-    };
-    return pages[constrain(idx, 0, 3)];
+    return MAIN_PAGES[constrain(idx, 0, MAIN_PAGE_COUNT - 1)];
+}
+int navigationSlotWidth() {
+    return (displayWidth - NAV_LEFT - NAV_RIGHT) / MAIN_PAGE_COUNT;
 }
 void uiText(int x, int y, const String& s, uint16_t color,
             int scale = 2, uint16_t background = UI_CARD) {
@@ -377,14 +387,24 @@ void rule(int x, int y, int w) {
 void tabShell(const char* /*module*/, int active) {
     M5.Display.fillScreen(UI_BG);
     M5.Display.drawFastHLine(32, 624, displayWidth - 64, UI_BORDER);
-    static const char* labels[] = {"AI PLATFORM", "NAS", "UPS", "USTAWIENIA"};
-    for (int i = 0; i < 4; ++i) {
-        const int x = 32 + i * 307;
+    static const char* labels[] = {
+        "AI PLATFORM", "ZASOBY", "NAS", "UPS", "USTAWIENIA"
+    };
+    static_assert(sizeof(labels) / sizeof(labels[0]) == MAIN_PAGE_COUNT,
+                  "InfoTAB page labels and page order must match");
+    const int slot = navigationSlotWidth();
+    for (int i = 0; i < MAIN_PAGE_COUNT; ++i) {
+        const int x = NAV_LEFT + i * slot;
         const bool selected = active == i;
-        if (selected) M5.Display.fillRoundRect(x, 640, 284, 60, 9, UI_CARD);
-        uiText(x + 27, 663, labels[i], selected ? UI_WHITE : UI_MUTED,
-               2, selected ? UI_CARD : UI_BG);
-        if (selected) M5.Display.fillRect(x + 16, 697, 252, 3, UI_ACCENT);
+        if (selected)
+            M5.Display.fillRoundRect(x + 3, 640, slot - 6, 60, 9, UI_CARD);
+        M5.Display.setTextSize(2);
+        const int labelWidth = M5.Display.textWidth(labels[i]);
+        uiText(x + (slot - labelWidth) / 2, 663, labels[i],
+               selected ? UI_WHITE : UI_MUTED, 2,
+               selected ? UI_CARD : UI_BG);
+        if (selected)
+            M5.Display.fillRect(x + 14, 697, slot - 28, 3, UI_ACCENT);
     }
 }
 String connectionStatus() {
@@ -442,6 +462,17 @@ void drawOverview() {
     }
     drawOverviewValues();
 }
+// Resources is intentionally an empty module shell until its telemetry
+// contract is agreed. No fabricated resource percentages or GPU load.
+void drawResources() {
+    tabShell("", 1);
+    uiText(42, 29, "ZASOBY", UI_WHITE, 3, UI_BG);
+    M5.Display.drawFastHLine(40, 74, displayWidth - 80, UI_BORDER);
+    uiText(56, 116, "MONITORING ZASOBOW AI PLATFORM", UI_MUTED, 2, UI_BG);
+    M5.Display.drawFastHLine(48, 169, displayWidth - 96, UI_BORDER);
+    uiText(56, 195, "ODCZYTY NIE SA JESZCZE SKONFIGUROWANE", UI_MUTED, 2, UI_BG);
+}
+
 // Eight aligned tiles; each live measurement has its own light graphite card.
 // UPS: the entire module is eight tiles. No topbar or outside diagnostics.
 // UPS module uses a clear single-column list, consistent with AI Platform.
@@ -483,7 +514,7 @@ void drawPowerValues() {
 }
 
 void drawPower() {
-    tabShell("", 2);
+    tabShell("", 3);
     upsListPainted = false;
     static const char* labels[UPS_ROW_COUNT] = {
         "Stan UPS",
@@ -552,7 +583,7 @@ void drawNetworkValues() {
     nasRowsPainted = true;
 }
 void drawNetwork() {
-    tabShell("", 1);
+    tabShell("", 2);
     nasRowsPainted = false;
     uiText(42, 29, "PARAMETRY NAS", UI_WHITE, 3, UI_BG);
     M5.Display.drawFastHLine(40, 74, 1193, UI_BORDER);
@@ -571,12 +602,12 @@ void drawServiceValues() {
     valueAt(675, 136, 535, 47,
             otaArmed ? "OTA AKTYWNE" : "OTA WYLACZONE",
             otaArmed ? UI_GOOD : UI_WHITE, 2);
-    valueAt(57, 427, 540, 44, "InfoTAB v0.9.2", UI_WHITE, 3);
+    valueAt(57, 427, 540, 44, "InfoTAB v0.9.3", UI_WHITE, 3);
     valueAt(57, 509, 540, 39,
             String("Czas pracy: ") + String(millis() / 60000) + " min", UI_MUTED, 2);
 }
 void drawService() {
-    tabShell("", 3);
+    tabShell("", 4);
     panel(32, 24, 595, 265);
     panel(651, 24, 597, 265);
     panel(32, 308, 595, 266);
@@ -627,9 +658,10 @@ void openMainPage(Page target) {
 }
 bool handleNavigationTap(int x, int y) {
     if (!mainPage(page) || y < 632 || y > 708) return false;
-    for (int i = 0; i < 4; ++i) {
-        const int left = 32 + i * 307;
-        if (inside(x, y, left, 632, 285, 76)) {
+    const int slot = navigationSlotWidth();
+    for (int i = 0; i < MAIN_PAGE_COUNT; ++i) {
+        const int left = NAV_LEFT + i * slot;
+        if (inside(x, y, left, 632, slot, 76)) {
             openMainPage(mainPageByIndex(i));
             return true;
         }
@@ -639,6 +671,9 @@ bool handleNavigationTap(int x, int y) {
 void handleDashboard(int x, int y) {
     if (handleNavigationTap(x,y)) return;
     // Overview is read-only; use horizontal swipe or bottom tabs to navigate.
+}
+void handleResources(int x, int y) {
+    handleNavigationTap(x, y);
 }
 void handlePower(int x, int y) {
     handleNavigationTap(x,y);
@@ -938,6 +973,7 @@ void drawConnecting() {
 void render() {
     switch (page) {
         case Page::Dashboard: drawDashboard(); break;
+        case Page::Resources: drawResources(); break;
         case Page::Power: drawPower(); break;
         case Page::NetworkInfo: drawNetwork(); break;
         case Page::Service: drawService(); break;
@@ -1247,7 +1283,7 @@ void loop() {
             abs(deltaX) > 2 * abs(deltaY) &&
             millis() - touchStartedAt < 1500) {
             const int next = mainPageIndex(page) + (deltaX < 0 ? 1 : -1);
-            if (next >= 0 && next <= 3) {
+            if (next >= 0 && next < MAIN_PAGE_COUNT) {
                 openMainPage(mainPageByIndex(next));
                 handledSwipe = true;
             }
@@ -1259,6 +1295,7 @@ void loop() {
         const int y = touch.y;
         switch (page) {
             case Page::Dashboard: handleDashboard(x, y); break;
+            case Page::Resources: handleResources(x, y); break;
             case Page::Power: handlePower(x, y); break;
             case Page::NetworkInfo: handleNetworkInfo(x, y); break;
             case Page::Service: handleService(x, y); break;
